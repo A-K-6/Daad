@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, Eye, EyeOff, CheckCircle2, AlertTriangle, HelpCircle, Mic, Volume2, Play, Sparkles } from 'lucide-react';
-import { SipConfig, ConnectionState } from '../types/sip';
-import { audioDeviceService, AudioDevice } from '../services/audioDeviceService';
-import { soundService } from '../services/soundService';
-import { updateService } from '../services/updateService';
+import { SipConfig, ConnectionState } from '@/types';
+import { audioDeviceService, AudioDevice } from '@/services/audioDeviceService';
+import { soundService } from '@/services';
+import { updateService } from '@/services';
 
 interface SettingsModalProps {
   currentConfig: SipConfig;

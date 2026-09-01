@@ -1,6 +1,6 @@
 import React from 'react';
 import { Phone, PhoneOff, PhoneCall } from 'lucide-react';
-import { CallInfo } from '../types/sip';
+import { CallInfo } from '@/types';
 
 interface IncomingCallModalProps {
   callInfo: CallInfo | null;

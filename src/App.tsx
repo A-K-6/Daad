@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { SipProvider, useSip } from './context/SipContext';
-import { StatusBar } from './components/StatusBar';
-import { LoginView } from './components/LoginView';
-import { DialerPad } from './components/DialerPad';
-import { RecentCallsView } from './components/RecentCallsView';
-import { ActiveCallView } from './components/ActiveCallView';
-import { IncomingCallModal } from './components/IncomingCallModal';
-import { SettingsModal } from './components/SettingsModal';
-import { UpdateModal } from './components/UpdateModal';
-import { LandingHero } from './components/LandingHero';
+import { SipProvider, useSip } from '@/context';
+import {
+  StatusBar,
+  LoginView,
+  DialerPad,
+  RecentCallsView,
+  ActiveCallView,
+  IncomingCallModal,
+  SettingsModal,
+  UpdateModal,
+  LandingHero,
+} from '@/components';
+import { SipConfig } from '@/types';
 import { Phone, Clock } from 'lucide-react';
-import { SipConfig } from './types/sip';
 
 const MainSoftphone: React.FC = () => {
   const {

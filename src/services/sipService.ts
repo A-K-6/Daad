@@ -10,7 +10,7 @@ import {
   Web,
   URI,
 } from 'sip.js';
-import { SipConfig, ConnectionState, CallState, CallInfo, CallDirection } from '../types/sip';
+import { SipConfig, ConnectionState, CallState, CallInfo, CallDirection } from '@/types';
 import { soundService } from './soundService';
 import { callHistoryService } from './callHistoryService';
 import { audioDeviceService } from './audioDeviceService';

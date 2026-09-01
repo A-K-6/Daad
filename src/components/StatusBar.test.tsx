@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { StatusBar } from './StatusBar';
-import { SipConfig } from '../types/sip';
+import { SipConfig } from '@/types';
 
 describe('StatusBar Component', () => {
   const mockConfig: SipConfig = {

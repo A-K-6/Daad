@@ -1,6 +1,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import { soundService } from '../services/soundService';
+import { soundService } from '@/services';
 
 interface DtmfKeypadModalProps {
   onSendTone: (tone: string) => void;

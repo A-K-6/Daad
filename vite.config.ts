@@ -2,12 +2,18 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import basicSsl from '@vitejs/plugin-basic-ssl';
+import path from 'path';
 
 export default defineConfig({
   plugins: [
     react(),
     process.env.HTTPS === 'true' ? basicSsl() : undefined,
   ].filter(Boolean),
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   base: './',
   clearScreen: false,
   server: {

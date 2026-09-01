@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Download, Terminal, Shield, Cpu, Sparkles, Check, Copy, ExternalLink } from 'lucide-react';
-import { updateService } from '../services/updateService';
+import { updateService } from '@/services';
 
 export const LandingHero: React.FC = () => {
   const [copiedAsterisk, setCopiedAsterisk] = useState(false);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Phone, Delete } from 'lucide-react';
-import { soundService } from '../services/soundService';
-import { ConnectionState } from '../types/sip';
+import { soundService } from '@/services';
+import { ConnectionState } from '@/types';
 
 interface DialerPadProps {
   connectionState: ConnectionState;

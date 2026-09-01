@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, RefreshCw, Sparkles, CheckCircle2, AlertTriangle, ExternalLink, Download } from 'lucide-react';
-import { updateService, UpdateStatus, UpdateInfo } from '../services/updateService';
+import { updateService, UpdateStatus, UpdateInfo } from '@/services/updateService';
 
 interface UpdateModalProps {
   onClose: () => void;

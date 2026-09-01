@@ -1,8 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { sipService } from '../services/sipService';
-import { callHistoryService } from '../services/callHistoryService';
-import { SipConfig, ConnectionState, CallState, CallInfo } from '../types/sip';
-import { CallRecord } from '../types/callHistory';
+import { sipService, callHistoryService } from '@/services';
+import { SipConfig, ConnectionState, CallState, CallInfo, CallRecord } from '@/types';
 
 const STORAGE_KEY = 'daad_sip_config';
 

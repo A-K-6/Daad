@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ActiveCallView } from './ActiveCallView';
-import { CallInfo } from '../types/sip';
+import { CallInfo } from '@/types';
 
 describe('ActiveCallView Component', () => {
   const sampleCallInfo: CallInfo = {

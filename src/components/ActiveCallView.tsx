@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Mic, MicOff, Pause, Play, PhoneOff, Grid, User } from 'lucide-react';
-import { CallState, CallInfo } from '../types/sip';
-import { DtmfKeypadModal } from './DtmfKeypadModal';
+import { CallState, CallInfo } from '@/types';
+import { DtmfKeypadModal } from '@/components/DtmfKeypadModal';
 
 interface ActiveCallViewProps {
   callState: CallState;

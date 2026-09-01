@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { RecentCallsView } from './RecentCallsView';
-import { CallRecord } from '../types/callHistory';
+import { CallRecord } from '@/types';
 
 describe('RecentCallsView Component', () => {
   const sampleRecords: CallRecord[] = [

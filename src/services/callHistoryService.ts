@@ -1,4 +1,4 @@
-import { CallRecord } from '../types/callHistory';
+import { CallRecord } from '@/types';
 
 const STORAGE_KEY = 'daad_call_history';
 const MAX_HISTORY_ITEMS = 50;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Phone, AlertCircle, LogOut, Sparkles } from 'lucide-react';
-import { ConnectionState, SipConfig } from '../types/sip';
-import { updateService } from '../services/updateService';
+import { ConnectionState, SipConfig } from '@/types';
+import { updateService } from '@/services';
 
 interface StatusBarProps {
   connectionState: ConnectionState;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { PhoneIncoming, PhoneOutgoing, PhoneMissed, Phone, Trash2 } from 'lucide-react';
-import { CallRecord } from '../types/callHistory';
+import { CallRecord } from '@/types';
 
 interface RecentCallsViewProps {
   records: CallRecord[];

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sipService } from './sipService';
-import { SipConfig } from '../types/sip';
+import { SipConfig } from '@/types';
 
 describe('SipService', () => {
   const sampleConfig: SipConfig = {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Phone, Eye, EyeOff, AlertCircle, ChevronDown, ChevronUp, Server, Shield } from 'lucide-react';
-import { SipConfig, ConnectionState } from '../types/sip';
+import { SipConfig, ConnectionState } from '@/types';
 
 interface LoginViewProps {
   initialConfig: SipConfig;

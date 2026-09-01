@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { IncomingCallModal } from './IncomingCallModal';
-import { CallInfo } from '../types/sip';
+import { CallInfo } from '@/types';
 
 describe('IncomingCallModal Component', () => {
   const sampleIncomingInfo: CallInfo = {
