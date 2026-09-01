@@ -44,7 +44,7 @@ describe('LoginView Component', () => {
     const asteriskBtn = screen.getByRole('button', { name: /asterisk/i });
     fireEvent.click(asteriskBtn);
 
-    const serverInput = screen.getByPlaceholderText('wss://pbx.example.com:8089/ws') as HTMLInputElement;
+    const serverInput = screen.getByPlaceholderText(/10\.41\.113\.71/i) as HTMLInputElement;
     expect(serverInput.value).toBe('wss://127.0.0.1:8089/ws');
   });
 

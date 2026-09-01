@@ -20,3 +20,9 @@ log = "0.4"
 tauri = { version = "2.11.3", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 tauri-plugin-process = "2"
+tokio = { version = "1.38", features = ["full"] }
+tokio-tungstenite = "0.29"
+tokio-rustls = "0.26"
+futures-util = "0.3"
+rustls-pki-types = "1"
+webpki-roots = "1.0"

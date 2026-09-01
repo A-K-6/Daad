@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Phone, Eye, EyeOff, AlertCircle, ChevronDown, ChevronUp, Server, Shield, Sparkles } from 'lucide-react';
+import { Phone, Eye, EyeOff, AlertCircle, ChevronDown, ChevronUp, Server, Shield } from 'lucide-react';
 import { SipConfig, ConnectionState } from '../types/sip';
 
 interface LoginViewProps {
@@ -41,8 +41,28 @@ export const LoginView: React.FC<LoginViewProps> = ({
     await onLogin(formData);
   };
 
-  const handleApplyPreset = (preset: 'asterisk' | 'freeswitch' | 'demo') => {
-    if (preset === 'asterisk') {
+  const handleApplyPreset = (preset: 'tls' | 'tcp' | 'asterisk' | 'freeswitch' | 'demo') => {
+    if (preset === 'tls') {
+      setFormData({
+        serverUrl: 'tls://10.41.113.71:5061',
+        sipUri: 'sip:host-1001@10.41.113.71',
+        username: 'host-1001',
+        password: '',
+        displayName: 'Host 1001',
+        stunServer: 'stun:stun.l.google.com:19302',
+        registerExpires: 600,
+      });
+    } else if (preset === 'tcp') {
+      setFormData({
+        serverUrl: 'tcp://127.0.0.1:5060',
+        sipUri: 'sip:1001@127.0.0.1',
+        username: '1001',
+        password: '',
+        displayName: 'User 1001',
+        stunServer: 'stun:stun.l.google.com:19302',
+        registerExpires: 600,
+      });
+    } else if (preset === 'asterisk') {
       setFormData({
         serverUrl: 'wss://127.0.0.1:8089/ws',
         sipUri: 'sip:1001@127.0.0.1',
@@ -105,47 +125,56 @@ export const LoginView: React.FC<LoginViewProps> = ({
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-zinc-500 uppercase font-semibold tracking-wider">
-              Presets
+              Presets & Transports
             </span>
           </div>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-4 gap-1">
+            <button
+              type="button"
+              onClick={() => handleApplyPreset('tls')}
+              className="py-1 px-1.5 rounded-lg bg-[#13151f] hover:bg-[#1a1c2a] border border-white/[0.06] hover:border-emerald-500/30 text-zinc-300 hover:text-emerald-400 text-[10px] font-medium transition-all text-center"
+            >
+              TLS 5061
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyPreset('tcp')}
+              className="py-1 px-1.5 rounded-lg bg-[#13151f] hover:bg-[#1a1c2a] border border-white/[0.06] hover:border-emerald-500/30 text-zinc-300 hover:text-emerald-400 text-[10px] font-medium transition-all text-center"
+            >
+              TCP 5060
+            </button>
             <button
               type="button"
               onClick={() => handleApplyPreset('asterisk')}
-              className="py-1 px-2 rounded-lg bg-[#13151f] hover:bg-[#1a1c2a] border border-white/[0.06] hover:border-emerald-500/30 text-zinc-300 hover:text-emerald-400 text-[11px] font-medium transition-all"
+              className="py-1 px-1.5 rounded-lg bg-[#13151f] hover:bg-[#1a1c2a] border border-white/[0.06] hover:border-emerald-500/30 text-zinc-300 hover:text-emerald-400 text-[10px] font-medium transition-all text-center"
             >
               Asterisk
             </button>
             <button
               type="button"
               onClick={() => handleApplyPreset('freeswitch')}
-              className="py-1 px-2 rounded-lg bg-[#13151f] hover:bg-[#1a1c2a] border border-white/[0.06] hover:border-emerald-500/30 text-zinc-300 hover:text-emerald-400 text-[11px] font-medium transition-all"
+              className="py-1 px-1.5 rounded-lg bg-[#13151f] hover:bg-[#1a1c2a] border border-white/[0.06] hover:border-emerald-500/30 text-zinc-300 hover:text-emerald-400 text-[10px] font-medium transition-all text-center"
             >
               FreeSWITCH
-            </button>
-            <button
-              type="button"
-              onClick={() => handleApplyPreset('demo')}
-              className="py-1 px-2 rounded-lg bg-[#13151f] hover:bg-[#1a1c2a] border border-white/[0.06] hover:border-emerald-500/30 text-zinc-300 hover:text-emerald-400 text-[11px] font-medium transition-all flex items-center justify-center space-x-1"
-            >
-              <Sparkles className="w-3 h-3" />
-              <span>Demo</span>
             </button>
           </div>
         </div>
 
         {/* Server Endpoint */}
         <div>
-          <label className="block text-[11px] font-medium text-zinc-400 mb-1 flex items-center space-x-1">
-            <Server className="w-3 h-3 text-zinc-500" />
-            <span>WebSocket URL (WSS)</span>
+          <label className="block text-[11px] font-medium text-zinc-400 mb-1 flex items-center justify-between">
+            <div className="flex items-center space-x-1">
+              <Server className="w-3 h-3 text-zinc-500" />
+              <span>Server Address / Host</span>
+            </div>
+            <span className="text-[9px] text-zinc-500 font-mono">TLS / TCP / UDP / WSS</span>
           </label>
           <input
             type="text"
             required
             value={formData.serverUrl}
             onChange={(e) => handleChange('serverUrl', e.target.value)}
-            placeholder="wss://pbx.example.com:8089/ws"
+            placeholder="tls://10.41.113.71:5061 or 10.41.113.71:5061"
             className="w-full px-2.5 py-1.5 rounded-lg bg-[#13151f] border border-white/[0.08] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/60 font-mono text-xs transition-colors"
           />
         </div>

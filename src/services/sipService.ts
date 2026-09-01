@@ -153,10 +153,12 @@ class SipService {
         throw new Error(`Invalid SIP URI: ${config.sipUri}`);
       }
 
+      const transportServer = await this.resolveServerTransport(config.serverUrl.trim());
+
       const userAgentOptions: UserAgentOptions = {
         uri,
         transportOptions: {
-          server: config.serverUrl.trim(),
+          server: transportServer,
           traceSip: false,
         },
         authorizationUsername: config.username.trim(),
@@ -249,12 +251,73 @@ class SipService {
         await this.userAgent.stop();
         this.userAgent = null;
       }
-    } catch (e) {
-      console.warn('SIP Disconnect error:', e);
-    } finally {
+
+      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('stop_sip_bridge');
+        } catch (_) {}
+      }
+
+      this.currentConfig = null;
+      this.currentSession = null;
+      this.incomingInvitation = null;
+      this.setCallState('Idle');
       this.setConnectionState('Disconnected');
-      this.handleCallTerminated();
+    } catch (e) {
+      console.warn('Error during disconnect teardown:', e);
+      this.setConnectionState('Disconnected');
     }
+  }
+
+  private async resolveServerTransport(serverUrl: string): Promise<string> {
+    const clean = serverUrl.trim();
+
+    if (clean.startsWith('wss://') || clean.startsWith('ws://')) {
+      return clean;
+    }
+
+    let transport = 'tls';
+    let hostPort = clean;
+
+    if (clean.startsWith('tls://')) {
+      transport = 'tls';
+      hostPort = clean.replace(/^tls:\/\//, '');
+    } else if (clean.startsWith('tcp://')) {
+      transport = 'tcp';
+      hostPort = clean.replace(/^tcp:\/\//, '');
+    } else if (clean.startsWith('udp://')) {
+      transport = 'udp';
+      hostPort = clean.replace(/^udp:\/\//, '');
+    } else if (clean.startsWith('sip:')) {
+      const hasTls = clean.toLowerCase().includes('transport=tls');
+      const hasTcp = clean.toLowerCase().includes('transport=tcp');
+      const hasUdp = clean.toLowerCase().includes('transport=udp');
+      transport = hasTls ? 'tls' : hasTcp ? 'tcp' : hasUdp ? 'udp' : 'tls';
+      hostPort = clean.replace(/^sip:/, '').split(';')[0];
+    }
+
+    const parts = hostPort.split(':');
+    const remoteHost = parts[0];
+    const remotePort = parts[1] ? parseInt(parts[1], 10) : (transport === 'tls' ? 5061 : 5060);
+
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const bridge = await invoke<{ local_ws_url: string }>('start_sip_bridge', {
+          remoteHost,
+          remotePort,
+          transport,
+          allowInsecure: true,
+        });
+        console.log(`Native SIP bridge started: ${transport.toUpperCase()} -> ${remoteHost}:${remotePort} via ${bridge.local_ws_url}`);
+        return bridge.local_ws_url;
+      } catch (e) {
+        console.warn('Failed to start native SIP bridge, falling back to direct:', e);
+      }
+    }
+
+    return `ws://${remoteHost}:${remotePort}`;
   }
 
   /**

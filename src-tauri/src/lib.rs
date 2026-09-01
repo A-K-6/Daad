@@ -1,12 +1,41 @@
+mod sip_bridge;
+
+use std::sync::Arc;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WindowEvent,
+    Manager, State, WindowEvent,
 };
+use sip_bridge::{BridgeInfo, SipBridgeManager};
+
+#[tauri::command]
+async fn start_sip_bridge(
+    manager: State<'_, Arc<SipBridgeManager>>,
+    remote_host: String,
+    remote_port: u16,
+    transport: String,
+    allow_insecure: Option<bool>,
+) -> Result<BridgeInfo, String> {
+    manager
+        .start(remote_host, remote_port, transport, allow_insecure.unwrap_or(true))
+        .await
+}
+
+#[tauri::command]
+async fn stop_sip_bridge(
+    manager: State<'_, Arc<SipBridgeManager>>,
+) -> Result<(), String> {
+    manager.stop().await;
+    Ok(())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let bridge_manager = Arc::new(SipBridgeManager::new());
+
     tauri::Builder::default()
+        .manage(bridge_manager)
+        .invoke_handler(tauri::generate_handler![start_sip_bridge, stop_sip_bridge])
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
