@@ -69,6 +69,7 @@ Pre-compiled production binaries are generated on every tagged release:
 | **macOS** (Apple Silicon) | `.dmg` | [Download macOS DMG](https://github.com/A-K-6/Daad/releases/latest) |
 | **Windows** (x64) | `.exe` / `.msi` | [Download Windows Setup](https://github.com/A-K-6/Daad/releases/latest) |
 | **Linux** (x64) | `.AppImage` / `.deb` | [Download Linux AppImage](https://github.com/A-K-6/Daad/releases/latest) |
+| **iOS / Android** | Mobile & PWA | [Mobile Setup Guide](docs/MOBILE_SETUP.md) |
 
 > **macOS Note:** For unsigned open-source binaries, run `xattr -cr /Applications/Daad.app` in Terminal or click *Open Anyway* in **System Settings $\rightarrow$ Privacy & Security**.
 
