@@ -57,19 +57,13 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Daad Softphone ${{ github.ref_name }}'
           releaseBody: |
             ### 📞 Daad Softphone Desktop ${{ github.ref_name }}
             
-            Lightweight cross-platform softphone client built with Tauri v2, SIP.js (v0.21+), React, and Tailwind CSS.
+            Ultra-fast, minimal, modern cross-platform softphone client built with Tauri v2, SIP.js (v0.21+), React, and Tailwind CSS.
             
             #### 📦 Downloads:
             - **macOS (Apple Silicon):** `Daad_${{ github.ref_name }}_aarch64.dmg`
