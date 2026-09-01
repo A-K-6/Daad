@@ -1,12 +1,14 @@
-import React from 'react';
-import { Settings, Phone, AlertCircle, LogOut } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings, Phone, AlertCircle, LogOut, Sparkles } from 'lucide-react';
 import { ConnectionState, SipConfig } from '../types/sip';
+import { updateService } from '../services/updateService';
 
 interface StatusBarProps {
   connectionState: ConnectionState;
   connectionError: string | null;
   config: SipConfig;
   onOpenSettings: () => void;
+  onOpenUpdates?: () => void;
   onLogout?: () => void;
 }
 
@@ -15,8 +17,19 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   connectionError,
   config,
   onOpenSettings,
+  onOpenUpdates,
   onLogout,
 }) => {
+  const [hasUpdate, setHasUpdate] = useState<boolean>(false);
+
+  useEffect(() => {
+    const unsub = updateService.onChange(() => {
+      const info = updateService.getUpdateInfo();
+      setHasUpdate(Boolean(info?.hasUpdate));
+    });
+    return unsub;
+  }, []);
+
   const getStatusColor = () => {
     switch (connectionState) {
       case 'Registered':
@@ -67,6 +80,23 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       </div>
 
       <div className="flex items-center space-x-1">
+        {onOpenUpdates && (
+          <button
+            onClick={onOpenUpdates}
+            className={`p-2 rounded-lg transition-all relative ${
+              hasUpdate
+                ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'
+                : 'text-zinc-400 hover:text-zinc-100 hover:bg-[#1f2433]'
+            }`}
+            title={hasUpdate ? 'Software Update Available!' : 'Check for Updates'}
+          >
+            <Sparkles className="w-4 h-4" />
+            {hasUpdate && (
+              <span className="absolute top-1 right-1 w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
+            )}
+          </button>
+        )}
+
         {connectionState === 'RegistrationFailed' && (
           <button
             onClick={onOpenSettings}
@@ -76,6 +106,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             <AlertCircle className="w-4 h-4" />
           </button>
         )}
+
         <button
           onClick={onOpenSettings}
           className="p-2 text-zinc-400 hover:text-zinc-100 hover:bg-[#1f2433] rounded-lg transition-all"
@@ -83,6 +114,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         >
           <Settings className="w-4 h-4" />
         </button>
+
         {onLogout && (connectionState === 'Registered' || connectionState === 'Connecting') && (
           <button
             onClick={onLogout}

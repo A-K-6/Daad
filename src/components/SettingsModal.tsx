@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Eye, EyeOff, CheckCircle2, AlertTriangle, HelpCircle, Mic, Volume2, Play } from 'lucide-react';
+import { X, Eye, EyeOff, CheckCircle2, AlertTriangle, HelpCircle, Mic, Volume2, Play, Sparkles } from 'lucide-react';
 import { SipConfig, ConnectionState } from '../types/sip';
 import { audioDeviceService, AudioDevice } from '../services/audioDeviceService';
 import { soundService } from '../services/soundService';
+import { updateService } from '../services/updateService';
 
 interface SettingsModalProps {
   currentConfig: SipConfig;
@@ -11,6 +12,7 @@ interface SettingsModalProps {
   onSaveAndConnect: (config: SipConfig) => void;
   onDisconnect: () => void;
   onClose: () => void;
+  onOpenUpdates?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -20,10 +22,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSaveAndConnect,
   onDisconnect,
   onClose,
+  onOpenUpdates,
 }) => {
   const [formData, setFormData] = useState<SipConfig>({ ...currentConfig });
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'credentials' | 'audio' | 'help'>('credentials');
+  const [activeTab, setActiveTab] = useState<'credentials' | 'audio' | 'help' | 'about'>('credentials');
 
   const [inputDevices, setInputDevices] = useState<AudioDevice[]>([]);
   const [outputDevices, setOutputDevices] = useState<AudioDevice[]>([]);
@@ -117,7 +120,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
-          Audio Devices
+          Audio
         </button>
         <button
           type="button"
@@ -129,6 +132,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           }`}
         >
           PBX Guide
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('about')}
+          className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${
+            activeTab === 'about'
+              ? 'bg-[#1f2538] text-zinc-100 shadow-sm'
+              : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          About
         </button>
       </div>
 
@@ -375,6 +389,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <p className="text-[11px] text-zinc-400">
               If using self-signed TLS certificates on your local PBX, open the WSS URL in your browser once (e.g. <code className="text-zinc-200">https://your-pbx:8089/ws</code>) and accept the certificate warning.
             </p>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'about' && (
+        <div className="py-2 text-zinc-300 text-xs space-y-3">
+          <div className="p-3 rounded-xl bg-[#141824] border border-[#232838] space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-zinc-200">Daad Softphone</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-mono border border-emerald-500/20">
+                v{updateService.getCurrentVersion()}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400">
+              Cross-platform desktop SIP client built with Tauri v2, SIP.js, and React.
+            </p>
+          </div>
+
+          <div className="p-3 rounded-xl bg-[#141824] border border-[#232838] flex items-center justify-between">
+            <div>
+              <h4 className="font-semibold text-zinc-200">Auto-Update</h4>
+              <p className="text-[10px] text-zinc-400">Check GitHub for the newest releases</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                if (onOpenUpdates) onOpenUpdates();
+              }}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Check Updates</span>
+            </button>
           </div>
         </div>
       )}

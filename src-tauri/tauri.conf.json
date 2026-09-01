@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Daad",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "identifier": "com.daad.softphone",
   "build": {
     "frontendDist": "../dist",
@@ -26,7 +26,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' wss: ws: https: http: stun:; media-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; connect-src 'self' wss: ws: https: http: stun: https://api.github.com https://github.com; media-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
@@ -41,6 +41,13 @@
     ],
     "macOS": {
       "infoPlist": "Info.plist"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/A-K-6/Daad/releases/latest/download/latest.json"
+      ]
     }
   }
 }

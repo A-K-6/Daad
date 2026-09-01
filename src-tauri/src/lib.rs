@@ -16,6 +16,13 @@ pub fn run() {
                 )?;
             }
 
+            // Register Updater and Process plugins
+            #[cfg(desktop)]
+            {
+                app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+                app.handle().plugin(tauri_plugin_process::init())?;
+            }
+
             // Create System Tray Menu
             let show_item = MenuItem::with_id(app, "show", "Show Daad", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;

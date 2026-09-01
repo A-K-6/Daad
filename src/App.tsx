@@ -7,6 +7,7 @@ import { RecentCallsView } from './components/RecentCallsView';
 import { ActiveCallView } from './components/ActiveCallView';
 import { IncomingCallModal } from './components/IncomingCallModal';
 import { SettingsModal } from './components/SettingsModal';
+import { UpdateModal } from './components/UpdateModal';
 import { Phone, Clock } from 'lucide-react';
 import { SipConfig } from './types/sip';
 
@@ -33,6 +34,7 @@ const MainSoftphone: React.FC = () => {
   } = useSip();
 
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [showUpdates, setShowUpdates] = useState<boolean>(false);
   const [activeDialerTab, setActiveDialerTab] = useState<'keypad' | 'history'>('keypad');
 
   // Auto connect on startup if credentials exist
@@ -75,6 +77,7 @@ const MainSoftphone: React.FC = () => {
               connectionError={connectionError}
               config={config}
               onOpenSettings={() => setShowSettings(true)}
+              onOpenUpdates={() => setShowUpdates(true)}
               onLogout={logout}
             />
 
@@ -165,6 +168,14 @@ const MainSoftphone: React.FC = () => {
             onSaveAndConnect={handleSaveAndConnect}
             onDisconnect={logout}
             onClose={() => setShowSettings(false)}
+            onOpenUpdates={() => setShowUpdates(true)}
+          />
+        )}
+
+        {/* Update Modal */}
+        {showUpdates && (
+          <UpdateModal
+            onClose={() => setShowUpdates(false)}
           />
         )}
       </div>
