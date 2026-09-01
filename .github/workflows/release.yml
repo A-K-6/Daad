@@ -71,6 +71,6 @@ jobs:
             - **Linux (x64):** `Daad_${{ github.ref_name }}_amd64.AppImage` / `.deb`
             
             > **macOS Note:** For unsigned open-source binaries, run `xattr -cr /Applications/Daad.app` in Terminal or click *Open Anyway* in System Settings > Privacy & Security.
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
