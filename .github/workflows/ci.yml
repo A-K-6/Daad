@@ -32,7 +32,10 @@ jobs:
       - name: Install Dependencies
         run: bun install --frozen-lockfile
 
-      - name: Parallel Build & Typecheck
+      - name: Typecheck TypeScript
+        run: bun run typecheck
+
+      - name: Build Frontend
         run: bun run build
 
       - name: Run Automated Test Suite
