@@ -30,17 +30,17 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     return unsub;
   }, []);
 
-  const getStatusColor = () => {
+  const getStatusDot = () => {
     switch (connectionState) {
       case 'Registered':
-        return 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]';
+        return 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]';
       case 'Connecting':
-        return 'bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.6)]';
+        return 'bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(251,191,36,0.7)]';
       case 'RegistrationFailed':
-        return 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]';
+        return 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.7)]';
       case 'Disconnected':
       default:
-        return 'bg-zinc-500';
+        return 'bg-zinc-600';
     }
   };
 
@@ -59,19 +59,19 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   };
 
   return (
-    <header className="flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#242938] select-none">
+    <header className="flex items-center justify-between px-3.5 py-2.5 bg-[#0e1017] border-b border-white/[0.06] select-none">
       <div className="flex items-center space-x-2.5 min-w-0">
-        <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-          <Phone className="w-3.5 h-3.5" />
+        <div className="flex items-center justify-center w-6 h-6 rounded-md bg-white/[0.04] border border-white/[0.08] text-emerald-400 shrink-0">
+          <Phone className="w-3 h-3" />
         </div>
         <div className="min-w-0">
           <div className="flex items-center space-x-1.5">
-            <span data-testid="status-dot" className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
-            <h1 className="text-xs font-semibold tracking-wider text-zinc-100 uppercase truncate">
+            <span data-testid="status-dot" className={`w-1.5 h-1.5 rounded-full ${getStatusDot()}`} />
+            <h1 className="text-[11px] font-medium tracking-wide text-zinc-200 truncate">
               {getStatusText()}
             </h1>
           </div>
-          <p className="text-[10px] text-zinc-400 truncate">
+          <p className="text-[10px] text-zinc-500 font-mono truncate">
             {connectionState === 'Registered'
               ? config.sipUri
               : connectionError || 'Configure SIP in Settings'}
@@ -83,16 +83,16 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         {onOpenUpdates && (
           <button
             onClick={onOpenUpdates}
-            className={`p-2 rounded-lg transition-all relative ${
+            className={`p-1.5 rounded-md transition-all relative ${
               hasUpdate
-                ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'
-                : 'text-zinc-400 hover:text-zinc-100 hover:bg-[#1f2433]'
+                ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.05]'
             }`}
             title={hasUpdate ? 'Software Update Available!' : 'Check for Updates'}
           >
-            <Sparkles className="w-4 h-4" />
+            <Sparkles className="w-3.5 h-3.5" />
             {hasUpdate && (
-              <span className="absolute top-1 right-1 w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
             )}
           </button>
         )}
@@ -103,25 +103,25 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             className="p-1.5 text-rose-400 hover:text-rose-300 transition-colors"
             title={connectionError || 'Registration Error'}
           >
-            <AlertCircle className="w-4 h-4" />
+            <AlertCircle className="w-3.5 h-3.5" />
           </button>
         )}
 
         <button
           onClick={onOpenSettings}
-          className="p-2 text-zinc-400 hover:text-zinc-100 hover:bg-[#1f2433] rounded-lg transition-all"
+          className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.05] rounded-md transition-all"
           title="SIP Settings"
         >
-          <Settings className="w-4 h-4" />
+          <Settings className="w-3.5 h-3.5" />
         </button>
 
         {onLogout && (connectionState === 'Registered' || connectionState === 'Connecting') && (
           <button
             onClick={onLogout}
-            className="p-2 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
+            className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-all"
             title="Log Out / Disconnect"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
           </button>
         )}
       </div>

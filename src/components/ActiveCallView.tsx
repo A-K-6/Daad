@@ -1,13 +1,5 @@
 import React, { useState } from 'react';
-import {
-  Mic,
-  MicOff,
-  Pause,
-  Play,
-  Grid3x3,
-  PhoneOff,
-  User,
-} from 'lucide-react';
+import { Mic, MicOff, Pause, Play, PhoneOff, Grid, User } from 'lucide-react';
 import { CallState, CallInfo } from '../types/sip';
 import { DtmfKeypadModal } from './DtmfKeypadModal';
 
@@ -28,7 +20,7 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
   onToggleHold,
   onSendDtmf,
 }) => {
-  const [showDtmfKeypad, setShowDtmfKeypad] = useState<boolean>(false);
+  const [showDtmf, setShowDtmf] = useState<boolean>(false);
 
   const formatDuration = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -36,127 +28,127 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getStatusText = () => {
+  const getStatusBadge = () => {
     switch (callState) {
       case 'Calling':
-        return 'Calling...';
+        return { text: 'Calling...', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
       case 'Ringing':
-        return 'Ringing...';
+        return { text: 'Ringing...', color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' };
       case 'Holding':
-        return 'Call On Hold';
+        return { text: 'On Hold', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
       case 'Active':
       default:
-        return 'Connected';
+        return { text: 'Connected', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' };
     }
   };
 
-  const isMuted = callInfo?.isMuted || false;
-  const isHeld = callState === 'Holding' || (callInfo?.isHeld || false);
+  const badge = getStatusBadge();
 
   return (
-    <div className="flex flex-col h-full justify-between p-6 select-none relative bg-gradient-to-b from-[#131722] to-[#0f1117]">
-      {/* Remote Party Identity */}
-      <div className="flex flex-col items-center justify-center pt-8">
-        <div className="relative mb-4">
-          <div
-            className={`w-24 h-24 rounded-full flex items-center justify-center border-2 transition-all ${
-              callState === 'Active'
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                : isHeld
-                ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400'
-            }`}
-          >
-            <User className="w-12 h-12" />
-          </div>
-          {(callState === 'Calling' || callState === 'Ringing') && (
-            <div className="absolute inset-0 rounded-full border border-emerald-500/40 animate-ping" />
-          )}
+    <div className="flex flex-col h-full justify-between p-5 select-none relative bg-[#090a0f]">
+      {/* Top Caller Info */}
+      <div className="flex flex-col items-center justify-center pt-4">
+        <div className="w-16 h-16 rounded-2xl bg-[#13151f] border border-white/[0.08] flex items-center justify-center text-zinc-400 shadow-lg mb-3">
+          <User className="w-8 h-8 text-zinc-300" />
         </div>
 
-        <h2 className="text-2xl font-semibold text-zinc-100 tracking-tight text-center px-4 truncate max-w-full">
+        <h2 className="text-base font-semibold text-zinc-100 tracking-wide text-center">
           {callInfo?.remoteIdentity || 'Remote Party'}
         </h2>
 
-        <div className="mt-2 flex items-center space-x-2">
-          <span
-            className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${
-              isHeld
-                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                : callState === 'Active'
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
-            }`}
-          >
-            {getStatusText()}
+        {callInfo?.remoteUri && (
+          <p className="text-[10px] text-zinc-500 font-mono text-center truncate max-w-[240px] mt-0.5">
+            {callInfo.remoteUri}
+          </p>
+        )}
+
+        <div className="flex items-center space-x-2 mt-2.5">
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${badge.color}`}>
+            {badge.text}
           </span>
+          {callState === 'Active' && (
+            <span className="text-xs font-mono font-medium text-zinc-300">
+              {formatDuration(callInfo?.duration || 0)}
+            </span>
+          )}
         </div>
 
-        {callState === 'Active' || callState === 'Holding' ? (
-          <div className="mt-3 font-mono text-lg text-zinc-300">
-            {formatDuration(callInfo?.duration || 0)}
+        {/* Audio Equalizer Waveform */}
+        {callState === 'Active' && !callInfo?.isHeld && (
+          <div className="flex items-center justify-center space-x-1 mt-4 h-7">
+            <span className="w-1 bg-emerald-400/80 rounded-full animate-wave-1" />
+            <span className="w-1 bg-emerald-400/80 rounded-full animate-wave-2" />
+            <span className="w-1 bg-emerald-400/80 rounded-full animate-wave-3" />
+            <span className="w-1 bg-emerald-400/80 rounded-full animate-wave-4" />
+            <span className="w-1 bg-emerald-400/80 rounded-full animate-wave-5" />
           </div>
-        ) : null}
+        )}
       </div>
 
-      {/* In-Call Controls */}
-      <div className="flex flex-col items-center space-y-6 pb-4">
-        <div className="grid grid-cols-3 gap-5">
+      {/* In-Call Action Grid */}
+      <div className="space-y-4 pb-2">
+        <div className="grid grid-cols-3 gap-2.5 max-w-[250px] mx-auto">
           {/* Mute Button */}
           <button
             onClick={onToggleMute}
-            className={`flex flex-col items-center justify-center w-16 h-16 rounded-2xl border transition-all active:scale-95 ${
-              isMuted
-                ? 'bg-rose-500/20 border-rose-500/40 text-rose-400 shadow-sm'
-                : 'bg-[#181c28] border-[#252b3d] text-zinc-300 hover:text-zinc-100 hover:bg-[#202536]'
+            title={callInfo?.isMuted ? 'Unmute Mic' : 'Mute Mic'}
+            className={`flex flex-col items-center justify-center h-16 rounded-xl border transition-all active:scale-95 ${
+              callInfo?.isMuted
+                ? 'bg-rose-500/15 border-rose-500/30 text-rose-400'
+                : 'bg-[#13151f] hover:bg-[#1a1c2a] border-white/[0.06] text-zinc-300'
             }`}
-            title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
           >
-            {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-            <span className="text-[10px] mt-1 font-medium">{isMuted ? 'Muted' : 'Mute'}</span>
+            {callInfo?.isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            <span className="text-[9px] font-medium mt-1">
+              {callInfo?.isMuted ? 'Muted' : 'Mute'}
+            </span>
           </button>
 
           {/* Hold Button */}
           <button
             onClick={onToggleHold}
             disabled={callState !== 'Active' && callState !== 'Holding'}
-            className={`flex flex-col items-center justify-center w-16 h-16 rounded-2xl border transition-all active:scale-95 ${
-              isHeld
-                ? 'bg-amber-500/20 border-amber-500/40 text-amber-400 shadow-sm'
-                : 'bg-[#181c28] border-[#252b3d] text-zinc-300 hover:text-zinc-100 hover:bg-[#202536]'
+            title={callInfo?.isHeld ? 'Resume Call' : 'Hold Call'}
+            className={`flex flex-col items-center justify-center h-16 rounded-xl border transition-all active:scale-95 disabled:opacity-40 ${
+              callInfo?.isHeld
+                ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                : 'bg-[#13151f] hover:bg-[#1a1c2a] border-white/[0.06] text-zinc-300'
             }`}
-            title={isHeld ? 'Resume Call' : 'Hold Call'}
           >
-            {isHeld ? <Play className="w-6 h-6" /> : <Pause className="w-6 h-6" />}
-            <span className="text-[10px] mt-1 font-medium">{isHeld ? 'Resume' : 'Hold'}</span>
+            {callInfo?.isHeld ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+            <span className="text-[9px] font-medium mt-1">
+              {callInfo?.isHeld ? 'Unhold' : 'Hold'}
+            </span>
           </button>
 
           {/* DTMF Keypad Button */}
           <button
-            onClick={() => setShowDtmfKeypad(true)}
-            className="flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-[#181c28] border border-[#252b3d] text-zinc-300 hover:text-zinc-100 hover:bg-[#202536] transition-all active:scale-95"
+            onClick={() => setShowDtmf(true)}
             title="In-Call Keypad"
+            className="flex flex-col items-center justify-center h-16 rounded-xl bg-[#13151f] hover:bg-[#1a1c2a] border border-white/[0.06] text-zinc-300 transition-all active:scale-95"
           >
-            <Grid3x3 className="w-6 h-6" />
-            <span className="text-[10px] mt-1 font-medium">Keypad</span>
+            <Grid className="w-5 h-5" />
+            <span className="text-[9px] font-medium mt-1">Keypad</span>
           </button>
         </div>
 
-        {/* End Call Button */}
-        <button
-          onClick={onHangup}
-          className="flex items-center justify-center w-16 h-16 rounded-full bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 hover:shadow-rose-600/50 transition-all active:scale-95"
-          title="End Call"
-        >
-          <PhoneOff className="w-7 h-7" />
-        </button>
+        {/* Hangup Trigger */}
+        <div className="flex justify-center items-center">
+          <button
+            onClick={onHangup}
+            title="End Call"
+            className="flex items-center justify-center w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/25 transition-all active:scale-95 cursor-pointer"
+          >
+            <PhoneOff className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
-      {/* In-Call DTMF Keypad Modal */}
-      {showDtmfKeypad && (
+      {/* In-Call DTMF Drawer */}
+      {showDtmf && (
         <DtmfKeypadModal
-          onSendTone={(tone) => onSendDtmf(tone)}
-          onClose={() => setShowDtmfKeypad(false)}
+          onSendTone={onSendDtmf}
+          onClose={() => setShowDtmf(false)}
         />
       )}
     </div>

@@ -1,82 +1,124 @@
-# Daad Softphone 📞
+<div align="center">
 
-**Daad** is a lightweight, cross-platform softphone desktop application built with **Tauri v2 (Rust)**, **React**, **TypeScript**, **Tailwind CSS**, and **SIP.js (v0.21+)** using WebSockets (WSS) and WebRTC.
+# Daad • داد
+
+**Ultra-fast, minimal, modern cross-platform SIP softphone desktop client.**
+
+[![CI](https://github.com/A-K-6/Daad/actions/workflows/ci.yml/badge.svg)](https://github.com/A-K-6/Daad/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/A-K-6/Daad?color=10b981&label=release)](https://github.com/A-K-6/Daad/releases)
+[![Tauri v2](https://img.shields.io/badge/Tauri-v2-blue?logo=tauri)](https://tauri.app)
+[![Bun](https://img.shields.io/badge/Bun-v1.4+-fbf0df?logo=bun)](https://bun.sh)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+[**Live Web Showcase**](https://a-k-6.github.io/Daad/) • [**Download Releases**](https://github.com/A-K-6/Daad/releases) • [**PBX Setup Guide**](#-pbx-configuration-recipes)
+
+</div>
 
 ---
 
-## Features
+## ⚡ What is Daad?
 
-- ⚡ **Lightweight & Fast:** Single-window (~360x600px) compact dialer powered by Tauri v2 and Vite.
-- 🎙️ **Two-Way WebRTC Audio:** Standard WebRTC audio stream routing with automatic audio track binding and DTMF support.
-- 🔄 **SIP.js Telephony Engine:** Registration, outbound/inbound audio calls, real-time connection state management.
-- 🎛️ **In-Call Controls:** Mute/Unmute microphone, Hold/Resume call, in-call DTMF Keypad for IVR menus, and Hangup.
-- 🎹 **Dual-Frequency Tone Synthesis:** Pure Web Audio API synthesis for zero-dependency DTMF tones, ringback cadence, and melodic ringtones.
-- 📥 **System Tray Support:** Minimizes to the system tray on window close (`on_window_event`) with left-click restore and "Show Daad" / "Quit" tray menu.
-- ⌨️ **Keyboard Support:** Supports physical keyboard numeric dialing (0-9, *, #, +, Backspace, Enter).
+**Daad (داد)** is an industrial-grade, developer-first SIP softphone designed for speed, clarity, and zero bloat. Built on **Tauri v2 (Rust)**, **SIP.js (v0.21+)**, **React**, and **Bun**, it brings modern Raycast/Linear-level ergonomics to VoIP desktop applications.
+
+- **🚀 Instant Startup & Low Memory:** Native Rust core with ~30MB RAM footprint.
+- **🎧 Pure Web Audio & WebRTC:** Crystal-clear 2-way audio with zero external sound files (synthesizes DTMF, ringback, and ringtone frequencies directly via Web Audio API).
+- **📥 Close-to-Tray Ergonomics:** Window hides to the system tray on close (`X`) with an interactive menu and single-click focus restore.
+- **🔄 In-App Auto-Updates:** Live GitHub Releases integration with one-click download, changelog preview, and relaunch.
+- **🎙️ Audio Device Selector:** Dynamic microphone and speaker enumeration with live output testing.
+- **📞 Call History & One-Tap Redial:** Persistent timeline of outgoing, answered, and missed calls.
+- **🛡️ Secure by Default:** Strict Content Security Policy (CSP), encrypted WSS/TLS transport, and WebRTC DTLS/SRTP audio.
 
 ---
 
-## Project Structure
+## 🏛️ Architecture
 
 ```
-Daad/
-├── src/
-│   ├── components/
-│   │   ├── ActiveCallView.tsx    # In-call interface (Timer, Mute, Hold, DTMF, Hangup)
-│   │   ├── DialerPad.tsx         # 12-key numeric keypad with physical keyboard listener
-│   │   ├── DtmfKeypadModal.tsx   # In-call DTMF dialer drawer for IVR menus
-│   │   ├── IncomingCallModal.tsx # Ringing banner with Answer / Decline buttons
-│   │   ├── SettingsModal.tsx     # SIP/WSS credentials manager with presets
-│   │   └── StatusBar.tsx         # Connection indicator dot & extension badge
-│   ├── hooks/
-│   │   └── useSip.ts             # React hook orchestrating SIP state and persistence
-│   ├── services/
-│   │   ├── sipService.ts         # Singleton wrapper over SIP.js UserAgent & Sessions
-│   │   └── soundService.ts       # Web Audio API synthesizer (DTMF, ringback, ringtone)
-│   ├── types/
-│   │   └── sip.ts                # TypeScript interfaces for SIP config & call states
-│   ├── App.tsx                   # Main window layout
-│   └── main.tsx                  # React entrypoint
-└── src-tauri/
-    ├── src/
-    │   ├── lib.rs                # System tray & window close-to-tray interception
-    │   └── main.rs               # Tauri entrypoint
-    ├── Info.plist                # macOS microphone permission description
-    └── tauri.conf.json           # Window dimensions (360x600) & capabilities
+┌─────────────────────────────────────────────────────────────┐
+│                       Daad UI (React)                       │
+│  ┌──────────────┬────────────────────────┬───────────────┐  │
+│  │ Login View   │ Keypad & Active Call   │ Recents View  │  │
+│  └──────────────┴────────────────────────┴───────────────┘  │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │              SipContext & State Machine               │  │
+│  └───────────────────────────────────────────────────────┘  │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ WebRTC Audio / WSS
+┌──────────────────────────────▼──────────────────────────────┐
+│                  SIP.js (v0.21+) Engine                     │
+│  ┌──────────────────────┬────────────────────────────────┐  │
+│  │ UserAgent / Register │ Session / Inviter / Invitation │  │
+│  └──────────────────────┴────────────────────────────────┘  │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Tauri IPC
+┌──────────────────────────────▼──────────────────────────────┐
+│                    Tauri v2 (Rust Core)                     │
+│  ┌──────────────────────┬────────────────────────────────┐  │
+│  │ System Tray Builder  │ Close Interceptor & AutoUpdate │  │
+│  └──────────────────────┴────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Getting Started
+## 📦 Downloads & Installation
+
+Pre-compiled production binaries are generated on every tagged release:
+
+| Platform | Format | Link |
+| :--- | :--- | :--- |
+| **macOS** (Apple Silicon) | `.dmg` | [Download macOS DMG](https://github.com/A-K-6/Daad/releases/latest) |
+| **Windows** (x64) | `.exe` / `.msi` | [Download Windows Setup](https://github.com/A-K-6/Daad/releases/latest) |
+| **Linux** (x64) | `.AppImage` / `.deb` | [Download Linux AppImage](https://github.com/A-K-6/Daad/releases/latest) |
+
+> **macOS Note:** For unsigned open-source binaries, run `xattr -cr /Applications/Daad.app` in Terminal or click *Open Anyway* in **System Settings $\rightarrow$ Privacy & Security**.
+
+---
+
+## 🛠️ Developer Quickstart
+
+Daad uses **Bun** as its package manager and runtime.
 
 ### Prerequisites
-- **Bun** (v1.0+) or Node.js (v18+)
-- **Rust & Cargo** (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
+- [Bun](https://bun.sh) (`curl -fsSL https://bun.sh/install | bash`)
+- [Rust & Cargo](https://rustup.rs/) (stable)
+- OS dependencies:
+  - **macOS:** Xcode Command Line Tools (`xcode-select --install`)
+  - **Linux (Ubuntu/Debian):** `sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev`
 
-### Development
-
-Run the frontend and desktop app in development mode with Bun:
+### Setup & Run
 ```bash
+# Clone the repository
+git clone https://github.com/A-K-6/Daad.git
+cd Daad
+
+# Install frontend dependencies
+bun install
+
+# Run desktop app in development mode
 bun run tauri dev
-```
 
-Or run the web frontend only:
-```bash
-bun run dev
-```
+# Run automated tests (56 unit & component tests)
+bun run test
 
-### Production Build
-
-Build the desktop bundle (DMG/App on macOS, MSI/EXE on Windows, AppImage/DEB on Linux):
-```bash
+# Build production desktop binary
 bun run tauri build
 ```
 
+### 📱 Test on Mobile Phone over Wi-Fi
+You can test the softphone and WebRTC audio directly on your phone:
+```bash
+# Starts HTTPS development server exposed to your local network
+bun run dev:phone
+```
+Open `https://<YOUR_LOCAL_IP>:1420` in Safari or Chrome on your mobile phone connected to the same Wi-Fi.
+
 ---
 
-## PBX Configuration Guide
+## 📡 PBX Configuration Recipes
 
-### 1. Asterisk (PJSIP + WebRTC)
+Daad connects to any SIP PBX that supports WebSockets (**WSS**) and **WebRTC**.
+
+### 1. Asterisk (PJSIP + WSS)
 
 #### `http.conf`
 ```ini
@@ -115,6 +157,7 @@ ice_support=yes
 media_use_received_transport=yes
 rtp_symmetric=yes
 rewrite_contact=yes
+force_rport=yes
 
 [1001]
 type=auth
@@ -128,45 +171,65 @@ max_contacts=5
 remove_existing=yes
 ```
 
-#### Settings in Daad:
-- **WebSocket Server URL:** `wss://your-asterisk-ip:8089/ws`
-- **SIP URI:** `sip:1001@your-asterisk-ip`
+#### Connection Settings in Daad:
+- **WebSocket URL (WSS):** `wss://your-asterisk-ip:8089/ws`
+- **SIP Address (URI):** `sip:1001@your-asterisk-ip`
 - **Username:** `1001`
 - **Password:** `YourSecretPassword`
 - **STUN Server:** `stun:stun.l.google.com:19302`
 
 ---
 
-### 2. FreeSWITCH (WSS + WebRTC)
+### 2. FreeSWITCH (Verto / WSS)
 
-Ensure the internal SIP profile enables WSS in `autoload_configs/sip_profiles/internal.xml`:
+Enable WSS in `autoload_configs/sip_profiles/internal.xml`:
 ```xml
 <param name="ws-binding" value=":5066"/>
 <param name="wss-binding" value=":7443"/>
 <param name="tls-cert-dir" value="/etc/freeswitch/tls"/>
+<param name="apply-candidate-acl" value="localnet.auto"/>
+<param name="local-network-acl" value="localnet.auto"/>
 ```
 
-#### Settings in Daad:
-- **WebSocket Server URL:** `wss://your-freeswitch-ip:7443`
-- **SIP URI:** `sip:1000@your-freeswitch-ip`
+#### Connection Settings in Daad:
+- **WebSocket URL (WSS):** `wss://your-freeswitch-ip:7443`
+- **SIP Address (URI):** `sip:1000@your-freeswitch-ip`
 - **Username:** `1000`
 - **Password:** `1234`
 - **STUN Server:** `stun:stun.l.google.com:19302`
 
-> **Note for Self-Signed Certificates:**
-> If your PBX uses a self-signed TLS certificate, navigate to the WebSocket URL in your browser once (e.g. `https://your-pbx:8089/ws` or `https://your-pbx:7443`) and click "Proceed / Accept Certificate" so the Webview trust store accepts the connection.
+---
+
+## 🧪 Test Suite
+
+Daad includes comprehensive test coverage using **Vitest** and **React Testing Library**:
+
+```bash
+bun run test
+```
+
+```
+ ✓ src/components/DialerPad.test.tsx (5 tests)
+ ✓ src/components/RecentCallsView.test.tsx (4 tests)
+ ✓ src/components/LandingHero.test.tsx (1 test)
+ ✓ src/components/UpdateModal.test.tsx (2 tests)
+ ✓ src/components/ActiveCallView.test.tsx (5 tests)
+ ✓ src/components/LoginView.test.tsx (4 tests)
+ ✓ src/components/SettingsModal.test.tsx (3 tests)
+ ✓ src/services/audioDeviceService.test.ts (3 tests)
+ ✓ src/services/soundService.test.ts (6 tests)
+ ✓ src/services/updateService.test.ts (3 tests)
+ ✓ src/services/callHistoryService.test.ts (3 tests)
+ ✓ src/services/sipService.test.ts (10 tests)
+ ✓ src/components/StatusBar.test.tsx (4 tests)
+ ✓ src/components/IncomingCallModal.test.tsx (3 tests)
+
+ Test Files  14 passed (14)
+      Tests  56 passed (56)
+```
 
 ---
 
-## Troubleshooting
+## 📄 License
 
-### macOS: "“Daad” is damaged and can’t be opened. You should move it to the Trash."
-This is a standard macOS Gatekeeper check for apps downloaded from the internet that are not signed with a paid Apple Developer certificate.
-
-To bypass this on your Mac:
-1. Move `Daad.app` to your `/Applications` folder.
-2. Open your terminal and run:
-   ```bash
-   xattr -cr /Applications/Daad.app
-   ```
-3. Or open **System Settings $\rightarrow$ Privacy & Security**, scroll down to the **Security** section, and click **"Open Anyway"**.
+Daad is licensed under the [MIT License](LICENSE).
