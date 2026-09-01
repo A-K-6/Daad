@@ -155,3 +155,18 @@ Ensure the internal SIP profile enables WSS in `autoload_configs/sip_profiles/in
 
 > **Note for Self-Signed Certificates:**
 > If your PBX uses a self-signed TLS certificate, navigate to the WebSocket URL in your browser once (e.g. `https://your-pbx:8089/ws` or `https://your-pbx:7443`) and click "Proceed / Accept Certificate" so the Webview trust store accepts the connection.
+
+---
+
+## Troubleshooting
+
+### macOS: "“Daad” is damaged and can’t be opened. You should move it to the Trash."
+This is a standard macOS Gatekeeper check for apps downloaded from the internet that are not signed with a paid Apple Developer certificate.
+
+To bypass this on your Mac:
+1. Move `Daad.app` to your `/Applications` folder.
+2. Open your terminal and run:
+   ```bash
+   xattr -cr /Applications/Daad.app
+   ```
+3. Or open **System Settings $\rightarrow$ Privacy & Security**, scroll down to the **Security** section, and click **"Open Anyway"**.
