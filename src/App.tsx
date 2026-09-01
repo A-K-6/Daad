@@ -1,22 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { useSip } from './hooks/useSip';
+import { SipProvider, useSip } from './context/SipContext';
 import { StatusBar } from './components/StatusBar';
 import { LoginView } from './components/LoginView';
 import { DialerPad } from './components/DialerPad';
+import { RecentCallsView } from './components/RecentCallsView';
 import { ActiveCallView } from './components/ActiveCallView';
 import { IncomingCallModal } from './components/IncomingCallModal';
 import { SettingsModal } from './components/SettingsModal';
+import { Phone, Clock } from 'lucide-react';
 import { SipConfig } from './types/sip';
 
-export const App: React.FC = () => {
+const MainSoftphone: React.FC = () => {
   const {
     config,
     connectionState,
     connectionError,
     callState,
     callInfo,
+    callHistory,
+    hasLoggedIn,
     connect,
-    disconnect,
+    login,
+    logout,
     makeCall,
     answerCall,
     rejectCall,
@@ -24,17 +29,15 @@ export const App: React.FC = () => {
     toggleMute,
     toggleHold,
     sendDTMF,
+    clearCallHistory,
   } = useSip();
 
   const [showSettings, setShowSettings] = useState<boolean>(false);
-  const [hasLoggedIn, setHasLoggedIn] = useState<boolean>(() => {
-    return Boolean(config.serverUrl && config.username && config.password);
-  });
+  const [activeDialerTab, setActiveDialerTab] = useState<'keypad' | 'history'>('keypad');
 
-  // Auto connect if credentials exist on initial mount
+  // Auto connect on startup if credentials exist
   useEffect(() => {
     if (config.serverUrl && config.username && config.password) {
-      setHasLoggedIn(true);
       connect(config).catch((e) => {
         console.warn('Initial SIP auto-connect failed:', e);
       });
@@ -42,25 +45,9 @@ export const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleLogin = async (newConfig: SipConfig) => {
-    setHasLoggedIn(true);
-    await connect(newConfig);
-  };
-
-  const handleLogout = async () => {
-    await disconnect();
-    setHasLoggedIn(false);
-  };
-
   const handleSaveAndConnect = async (newConfig: SipConfig) => {
     setShowSettings(false);
-    setHasLoggedIn(true);
     await connect(newConfig);
-  };
-
-  const handleDisconnectFromSettings = async () => {
-    await disconnect();
-    setShowSettings(false);
   };
 
   const isIncomingCallRinging = callState === 'Ringing' && callInfo?.direction === 'incoming';
@@ -78,7 +65,7 @@ export const App: React.FC = () => {
             initialConfig={config}
             connectionState={connectionState}
             connectionError={connectionError}
-            onLogin={handleLogin}
+            onLogin={login}
           />
         ) : (
           <>
@@ -88,7 +75,7 @@ export const App: React.FC = () => {
               connectionError={connectionError}
               config={config}
               onOpenSettings={() => setShowSettings(true)}
-              onLogout={handleLogout}
+              onLogout={logout}
             />
 
             {/* Main Dialer or In-Call Interface */}
@@ -103,11 +90,58 @@ export const App: React.FC = () => {
                   onSendDtmf={sendDTMF}
                 />
               ) : (
-                <DialerPad
-                  connectionState={connectionState}
-                  onCall={makeCall}
-                  onOpenSettings={() => setShowSettings(true)}
-                />
+                <div className="flex flex-col h-full justify-between">
+                  {/* Tab Selector */}
+                  <div className="flex px-4 pt-2 pb-1 space-x-1">
+                    <button
+                      onClick={() => setActiveDialerTab('keypad')}
+                      className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        activeDialerTab === 'keypad'
+                          ? 'bg-[#181c28] text-emerald-400 border border-[#252b3d] shadow-sm'
+                          : 'text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      <Phone className="w-3.5 h-3.5" />
+                      <span>Keypad</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveDialerTab('history')}
+                      className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        activeDialerTab === 'history'
+                          ? 'bg-[#181c28] text-emerald-400 border border-[#252b3d] shadow-sm'
+                          : 'text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Recents</span>
+                      {callHistory.length > 0 && (
+                        <span className="ml-1 px-1.5 py-0.2 text-[9px] rounded-full bg-zinc-800 text-zinc-400">
+                          {callHistory.length}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Tab Content */}
+                  <div className="flex-1 overflow-hidden">
+                    {activeDialerTab === 'keypad' ? (
+                      <DialerPad
+                        connectionState={connectionState}
+                        onCall={makeCall}
+                        onOpenSettings={() => setShowSettings(true)}
+                      />
+                    ) : (
+                      <RecentCallsView
+                        records={callHistory}
+                        onCall={(target) => {
+                          setActiveDialerTab('keypad');
+                          makeCall(target);
+                        }}
+                        onClear={clearCallHistory}
+                      />
+                    )}
+                  </div>
+                </div>
               )}
             </main>
           </>
@@ -129,12 +163,20 @@ export const App: React.FC = () => {
             connectionState={connectionState}
             connectionError={connectionError}
             onSaveAndConnect={handleSaveAndConnect}
-            onDisconnect={handleDisconnectFromSettings}
+            onDisconnect={logout}
             onClose={() => setShowSettings(false)}
           />
         )}
       </div>
     </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <SipProvider>
+      <MainSoftphone />
+    </SipProvider>
   );
 };
 

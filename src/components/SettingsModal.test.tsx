@@ -26,7 +26,7 @@ describe('SettingsModal Component', () => {
       />
     );
 
-    expect(screen.getByText('SIP Configuration')).toBeInTheDocument();
+    expect(screen.getByText('Settings')).toBeInTheDocument();
     expect(screen.getByDisplayValue('wss://pbx.example.com:8089/ws')).toBeInTheDocument();
     expect(screen.getByDisplayValue('sip:1001@pbx.example.com')).toBeInTheDocument();
     expect(screen.getByDisplayValue('1001')).toBeInTheDocument();

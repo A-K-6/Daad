@@ -12,6 +12,8 @@ import {
 } from 'sip.js';
 import { SipConfig, ConnectionState, CallState, CallInfo, CallDirection } from '../types/sip';
 import { soundService } from './soundService';
+import { callHistoryService } from './callHistoryService';
+import { audioDeviceService } from './audioDeviceService';
 
 type ConnectionStateListener = (state: ConnectionState, error?: string) => void;
 type CallStateListener = (state: CallState, info: CallInfo | null) => void;
@@ -28,6 +30,12 @@ class SipService {
   private callState: CallState = 'Idle';
   private callInfo: CallInfo | null = null;
   private callTimerInterval: number | null = null;
+
+  // Auto-reconnect with exponential backoff
+  private reconnectTimer: number | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private shouldAutoReconnect = true;
 
   private connectionListeners: Set<ConnectionStateListener> = new Set();
   private callStateListeners: Set<CallStateListener> = new Set();
@@ -69,6 +77,15 @@ class SipService {
   private setConnectionState(state: ConnectionState, error?: string) {
     this.connectionState = state;
     this.connectionListeners.forEach((l) => l(state, error));
+
+    if (state === 'Registered') {
+      this.reconnectAttempts = 0;
+      this.clearReconnectTimer();
+    } else if (state === 'RegistrationFailed' || state === 'Disconnected') {
+      if (this.shouldAutoReconnect && this.currentConfig && this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.scheduleReconnect();
+      }
+    }
   }
 
   private setCallState(state: CallState) {
@@ -97,12 +114,36 @@ class SipService {
     }
   }
 
+  private scheduleReconnect() {
+    this.clearReconnectTimer();
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+    this.reconnectAttempts++;
+
+    this.reconnectTimer = window.setTimeout(() => {
+      if (this.currentConfig && this.connectionState !== 'Registered' && this.connectionState !== 'Connecting') {
+        console.log(`Attempting SIP reconnection (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+        this.connectAndRegister(this.currentConfig).catch((e) => {
+          console.warn('Auto-reconnection attempt failed:', e);
+        });
+      }
+    }, delay);
+  }
+
+  private clearReconnectTimer() {
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
   /**
    * Connect to WSS server and Register SIP Account
    */
   public async connectAndRegister(config: SipConfig): Promise<void> {
     try {
-      await this.disconnect();
+      this.shouldAutoReconnect = true;
+      this.clearReconnectTimer();
+      await this.disconnect(false);
 
       this.currentConfig = config;
       this.setConnectionState('Connecting');
@@ -116,7 +157,7 @@ class SipService {
         uri,
         transportOptions: {
           server: config.serverUrl.trim(),
-          traceSip: true,
+          traceSip: false,
         },
         authorizationUsername: config.username.trim(),
         authorizationPassword: config.password,
@@ -135,7 +176,7 @@ class SipService {
           },
           onDisconnect: (error) => {
             if (error) {
-              console.warn('SIP Transport Disconnected with error:', error);
+              console.warn('SIP Transport Disconnected:', error);
               this.setConnectionState('RegistrationFailed', error.message);
             } else {
               this.setConnectionState('Disconnected');
@@ -152,14 +193,11 @@ class SipService {
       });
 
       this.registerer.stateChange.addListener((state: RegistererState) => {
-        console.log('SIP Registerer state:', state);
         switch (state) {
           case RegistererState.Registered:
             this.setConnectionState('Registered');
             break;
           case RegistererState.Unregistered:
-            this.setConnectionState('Disconnected');
-            break;
           case RegistererState.Terminated:
             this.setConnectionState('Disconnected');
             break;
@@ -185,7 +223,13 @@ class SipService {
   /**
    * Disconnect and teardown SIP client
    */
-  public async disconnect(): Promise<void> {
+  public async disconnect(stopAutoReconnect: boolean = true): Promise<void> {
+    if (stopAutoReconnect) {
+      this.shouldAutoReconnect = false;
+      this.clearReconnectTimer();
+      this.reconnectAttempts = 0;
+    }
+
     try {
       if (this.currentSession) {
         await this.hangup();
@@ -214,7 +258,7 @@ class SipService {
   }
 
   /**
-   * Initiate an outgoing 1-line audio call
+   * Initiate an outgoing audio call
    */
   public async makeCall(target: string): Promise<void> {
     if (!this.userAgent) {
@@ -240,9 +284,11 @@ class SipService {
       throw new Error(`Invalid destination number or URI: ${cleanTarget}`);
     }
 
+    const audioConstraints = audioDeviceService.getAudioConstraints();
+
     const inviter = new Inviter(this.userAgent, targetUri, {
       sessionDescriptionHandlerOptions: {
-        constraints: { audio: true, video: false },
+        constraints: { audio: audioConstraints, video: false },
       },
     });
 
@@ -266,23 +312,38 @@ class SipService {
       await inviter.invite({
         requestDelegate: {
           onProgress: (response) => {
-            console.log('Outgoing call ringing:', response);
             if (response.message.statusCode === 180 || response.message.statusCode === 183) {
               this.setCallState('Ringing');
             }
           },
-          onReject: (response) => {
-            console.warn('Outgoing call rejected:', response);
+          onReject: (_response) => {
             soundService.stopRingback();
             soundService.playCallEndTone();
+
+            callHistoryService.addRecord({
+              target: cleanTarget,
+              displayName: cleanTarget,
+              direction: 'outgoing',
+              status: 'rejected',
+              duration: 0,
+            });
+
             this.handleCallTerminated();
           },
         },
       });
     } catch (error) {
-      console.error('Call invitation failed:', error);
       soundService.stopRingback();
       soundService.playCallEndTone();
+
+      callHistoryService.addRecord({
+        target: cleanTarget,
+        displayName: cleanTarget,
+        direction: 'outgoing',
+        status: 'failed',
+        duration: 0,
+      });
+
       this.handleCallTerminated();
       throw error;
     }
@@ -293,7 +354,6 @@ class SipService {
    */
   private handleIncomingInvitation(invitation: Invitation) {
     if (this.callState !== 'Idle' || this.incomingInvitation) {
-      // Busy, reject immediately
       invitation.reject({ statusCode: 486 });
       return;
     }
@@ -322,6 +382,14 @@ class SipService {
         soundService.stopRingtone();
         if (this.incomingInvitation === invitation) {
           this.incomingInvitation = null;
+          // Missed call
+          callHistoryService.addRecord({
+            target: callerId,
+            displayName: callerId,
+            direction: 'incoming',
+            status: 'missed',
+            duration: 0,
+          });
         }
         this.handleCallTerminated();
       }
@@ -350,10 +418,12 @@ class SipService {
 
     this.setupSessionListeners(invitation, 'incoming', callerId);
 
+    const audioConstraints = audioDeviceService.getAudioConstraints();
+
     try {
       await invitation.accept({
         sessionDescriptionHandlerOptions: {
-          constraints: { audio: true, video: false },
+          constraints: { audio: audioConstraints, video: false },
         },
       });
       this.setCallState('Active');
@@ -369,11 +439,19 @@ class SipService {
   public async rejectCall(): Promise<void> {
     soundService.stopRingtone();
     if (this.incomingInvitation) {
+      const caller = this.callInfo?.remoteIdentity || 'Caller';
       try {
         await this.incomingInvitation.reject();
       } catch (e) {
         console.warn('Reject call error:', e);
       } finally {
+        callHistoryService.addRecord({
+          target: caller,
+          displayName: caller,
+          direction: 'incoming',
+          status: 'rejected',
+          duration: 0,
+        });
         this.incomingInvitation = null;
         this.handleCallTerminated();
       }
@@ -396,6 +474,10 @@ class SipService {
       return;
     }
 
+    const duration = this.callInfo?.duration || 0;
+    const remoteTarget = this.callInfo?.remoteIdentity || 'Remote Party';
+    const direction = this.callInfo?.direction || 'outgoing';
+
     try {
       switch (this.currentSession.state) {
         case SessionState.Initial:
@@ -413,6 +495,14 @@ class SipService {
     } catch (e) {
       console.warn('Hangup error:', e);
     } finally {
+      callHistoryService.addRecord({
+        target: remoteTarget,
+        displayName: remoteTarget,
+        direction,
+        status: 'answered',
+        duration,
+      });
+
       soundService.playCallEndTone();
       this.handleCallTerminated();
     }
@@ -470,7 +560,6 @@ class SipService {
     const sdh = this.currentSession.sessionDescriptionHandler as Web.SessionDescriptionHandler | undefined;
     if (!sdh?.peerConnection) return;
 
-    // Use WebRTC DTMF sender if available
     const senders = sdh.peerConnection.getSenders();
     const audioSender = senders.find((s) => s.track && s.track.kind === 'audio');
     if (audioSender?.dtmf) {
@@ -484,7 +573,6 @@ class SipService {
 
   private setupSessionListeners(session: Session, _direction: CallDirection, _remoteTarget: string) {
     session.stateChange.addListener((state: SessionState) => {
-      console.log('Session state updated:', state);
       switch (state) {
         case SessionState.Establishing:
           this.setCallState('Calling');
@@ -528,7 +616,7 @@ class SipService {
     if (audioElement) {
       audioElement.srcObject = remoteStream;
       audioElement.play().catch((err) => {
-        console.warn('Remote audio autoplay blocked or failed:', err);
+        console.warn('Remote audio autoplay blocked:', err);
       });
     }
   }

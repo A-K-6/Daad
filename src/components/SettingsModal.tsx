@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { X, Eye, EyeOff, CheckCircle2, AlertTriangle, HelpCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Eye, EyeOff, CheckCircle2, AlertTriangle, HelpCircle, Mic, Volume2, Play } from 'lucide-react';
 import { SipConfig, ConnectionState } from '../types/sip';
+import { audioDeviceService, AudioDevice } from '../services/audioDeviceService';
+import { soundService } from '../services/soundService';
 
 interface SettingsModalProps {
   currentConfig: SipConfig;
@@ -21,7 +23,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [formData, setFormData] = useState<SipConfig>({ ...currentConfig });
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'credentials' | 'help'>('credentials');
+  const [activeTab, setActiveTab] = useState<'credentials' | 'audio' | 'help'>('credentials');
+
+  const [inputDevices, setInputDevices] = useState<AudioDevice[]>([]);
+  const [outputDevices, setOutputDevices] = useState<AudioDevice[]>([]);
+  const [selectedInput, setSelectedInput] = useState<string>('');
+  const [selectedOutput, setSelectedOutput] = useState<string>('');
+
+  useEffect(() => {
+    audioDeviceService.refreshDevices();
+    const updateDevices = () => {
+      setInputDevices(audioDeviceService.getInputDevices());
+      setOutputDevices(audioDeviceService.getOutputDevices());
+      setSelectedInput(audioDeviceService.getSelectedInputId());
+      setSelectedOutput(audioDeviceService.getSelectedOutputId());
+    };
+
+    updateDevices();
+    const unsub = audioDeviceService.onChange(updateDevices);
+    return unsub;
+  }, []);
 
   const handleChange = (field: keyof SipConfig, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -54,13 +75,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  const handleTestAudio = () => {
+    soundService.playDtmf('5', 300);
+  };
+
   return (
     <div className="absolute inset-0 z-50 bg-[#0f1117]/95 backdrop-blur-md flex flex-col justify-between p-4 select-none animate-in fade-in zoom-in-95 duration-150 overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between pb-3 border-b border-[#232838]">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-100">SIP Configuration</h2>
-          <p className="text-[10px] text-zinc-400">Configure your PBX WSS & credentials</p>
+          <h2 className="text-sm font-semibold text-zinc-100">Settings</h2>
+          <p className="text-[10px] text-zinc-400">Configure SIP connection and audio devices</p>
         </div>
         <button
           onClick={onClose}
@@ -85,6 +110,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </button>
         <button
           type="button"
+          onClick={() => setActiveTab('audio')}
+          className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${
+            activeTab === 'audio'
+              ? 'bg-[#1f2538] text-zinc-100 shadow-sm'
+              : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          Audio Devices
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab('help')}
           className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${
             activeTab === 'help'
@@ -96,7 +132,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </button>
       </div>
 
-      {activeTab === 'credentials' ? (
+      {activeTab === 'credentials' && (
         <form onSubmit={handleSubmit} className="space-y-3 py-1 text-xs">
           {/* Status Banner */}
           {connectionState === 'RegistrationFailed' && connectionError && (
@@ -109,7 +145,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {connectionState === 'Registered' && (
             <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] flex items-center space-x-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-              <span>Registered successfully to {formData.sipUri}</span>
+              <span>Registered to {formData.sipUri}</span>
             </div>
           )}
 
@@ -165,7 +201,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            {/* Username / Extension */}
             <div>
               <label className="block text-[11px] font-medium text-zinc-300 mb-1">
                 Username / Ext
@@ -180,7 +215,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               />
             </div>
 
-            {/* Password / Secret */}
             <div>
               <label className="block text-[11px] font-medium text-zinc-300 mb-1">
                 Password / Secret
@@ -205,7 +239,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Display Name */}
           <div>
             <label className="block text-[11px] font-medium text-zinc-300 mb-1">
               Caller ID Display Name
@@ -219,7 +252,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             />
           </div>
 
-          {/* STUN Server */}
           <div>
             <label className="block text-[11px] font-medium text-zinc-300 mb-1">
               STUN Server (WebRTC ICE)
@@ -233,7 +265,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             />
           </div>
 
-          {/* Actions */}
           <div className="pt-2 flex items-center space-x-2">
             {connectionState === 'Registered' || connectionState === 'Connecting' ? (
               <button
@@ -252,7 +283,72 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
           </div>
         </form>
-      ) : (
+      )}
+
+      {activeTab === 'audio' && (
+        <div className="py-2 text-xs space-y-4">
+          <div>
+            <label className="block text-[11px] font-medium text-zinc-300 mb-1.5 flex items-center space-x-1.5">
+              <Mic className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Microphone (Input Device)</span>
+            </label>
+            <select
+              value={selectedInput}
+              onChange={(e) => {
+                setSelectedInput(e.target.value);
+                audioDeviceService.setInputDevice(e.target.value);
+              }}
+              className="w-full px-3 py-2 rounded-xl bg-[#141824] border border-[#252b3d] text-zinc-100 text-xs focus:outline-none focus:border-emerald-500"
+            >
+              <option value="">Default System Microphone</option>
+              {inputDevices.map((dev) => (
+                <option key={dev.deviceId} value={dev.deviceId}>
+                  {dev.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-medium text-zinc-300 mb-1.5 flex items-center space-x-1.5">
+              <Volume2 className="w-3.5 h-3.5 text-sky-400" />
+              <span>Speaker (Output Device)</span>
+            </label>
+            <select
+              value={selectedOutput}
+              onChange={(e) => {
+                setSelectedOutput(e.target.value);
+                audioDeviceService.setOutputDevice(e.target.value);
+              }}
+              className="w-full px-3 py-2 rounded-xl bg-[#141824] border border-[#252b3d] text-zinc-100 text-xs focus:outline-none focus:border-emerald-500"
+            >
+              <option value="">Default System Output</option>
+              {outputDevices.map((dev) => (
+                <option key={dev.deviceId} value={dev.deviceId}>
+                  {dev.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="p-3 rounded-xl bg-[#141824] border border-[#232838] flex items-center justify-between">
+            <div>
+              <h4 className="font-semibold text-zinc-200">Speaker Test</h4>
+              <p className="text-[10px] text-zinc-400">Play a test tone to verify output</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleTestAudio}
+              className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs transition-colors"
+            >
+              <Play className="w-3.5 h-3.5" />
+              <span>Test</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'help' && (
         <div className="py-2 text-zinc-300 text-xs space-y-3">
           <div className="p-2.5 rounded-lg bg-[#141824] border border-[#232838] space-y-1.5">
             <h4 className="font-semibold text-emerald-400 flex items-center space-x-1">
