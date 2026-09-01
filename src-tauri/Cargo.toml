@@ -26,3 +26,19 @@ tokio-rustls = "0.26"
 futures-util = "0.3"
 rustls-pki-types = "1"
 webpki-roots = "1.0"
+
+[profile.dev]
+opt-level = 0
+debug = 0
+codegen-units = 256
+incremental = true
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+opt-level = 2
+lto = "thin"
+codegen-units = 16
+panic = "abort"
+strip = true

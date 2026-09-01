@@ -6,7 +6,11 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [
-    react(),
+    react({
+      babel: {
+        compact: true,
+      },
+    }),
     process.env.HTTPS === 'true' ? basicSsl() : undefined,
   ].filter(Boolean),
   resolve: {
@@ -16,6 +20,10 @@ export default defineConfig({
   },
   base: './',
   clearScreen: false,
+  esbuild: {
+    target: 'es2022',
+    legalComments: 'none',
+  },
   server: {
     port: 1420,
     strictPort: true,
@@ -28,8 +36,11 @@ export default defineConfig({
   },
   envPrefix: ['VITE_', 'TAURI_'],
   build: {
-    target: process.env.TAURI_ENV_PLATFORM == 'windows' ? 'chrome105' : 'safari13',
+    target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'es2022',
     minify: !process.env.TAURI_ENV_DEBUG ? 'esbuild' : false,
+    cssMinify: 'esbuild',
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    reportCompressedSize: false, // Skips slow gzip size calculation for instant build
+    chunkSizeWarningLimit: 1200,
   },
 });
