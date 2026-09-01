@@ -1,6 +1,4 @@
-[build]
-rustflags = ["-C", "split-debuginfo=unpacked"]
-
+# Platform-specific debuginfo split (macOS only)
 [target.x86_64-apple-darwin]
 rustflags = ["-C", "split-debuginfo=unpacked"]
 

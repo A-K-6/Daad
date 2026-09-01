@@ -9,6 +9,8 @@ on:
 env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
   NODE_OPTIONS: '--no-deprecation'
+  CARGO_INCREMENTAL: '0'
+  CARGO_TERM_COLOR: always
 
 jobs:
   release:
@@ -20,15 +22,25 @@ jobs:
         include:
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
+            rustflags: '-C codegen-units=16 -C split-debuginfo=unpacked'
           - platform: 'ubuntu-22.04'
             args: ''
+            rustflags: '-C link-arg=-fuse-ld=mold -C codegen-units=16'
           - platform: 'windows-latest'
             args: ''
+            rustflags: '-C codegen-units=16'
 
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Disable Windows Defender (Accelerate Windows builds)
+        if: matrix.platform == 'windows-latest'
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
+          Set-MpPreference -DisableBehaviorMonitoring $true -ErrorAction SilentlyContinue
+        shell: powershell
 
       - name: Setup Node.js (Latest)
         uses: actions/setup-node@v4
@@ -49,12 +61,13 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          cache-on-failure: true
 
-      - name: Install Linux system dependencies
+      - name: Install Linux system dependencies & Mold Linker
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev mold clang
 
       - name: Install Frontend Dependencies
         run: bun install --frozen-lockfile
@@ -63,6 +76,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUSTFLAGS: ${{ matrix.rustflags }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Daad Softphone ${{ github.ref_name }}'
@@ -99,4 +113,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          echo "Publishing release draft for tag ${{ github.ref_name }}..."
           gh release edit "${{ github.ref_name }}" --draft=false
