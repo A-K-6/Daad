@@ -16,10 +16,9 @@ pub fn run() {
                 )?;
             }
 
-            // Register Updater and Process plugins
+            // Register Process plugin
             #[cfg(desktop)]
             {
-                app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
                 app.handle().plugin(tauri_plugin_process::init())?;
             }
 

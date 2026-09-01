@@ -42,12 +42,5 @@
     "macOS": {
       "infoPlist": "Info.plist"
     }
-  },
-  "plugins": {
-    "updater": {
-      "endpoints": [
-        "https://github.com/A-K-6/Daad/releases/latest/download/latest.json"
-      ]
-    }
   }
 }
