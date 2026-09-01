@@ -34,6 +34,9 @@ jobs:
       - name: Build Frontend & Typecheck
         run: bun run build
 
+      - name: Run Automated Unit Tests
+        run: bun run test
+
       - name: Cargo Check Backend
         working-directory: ./src-tauri
         run: cargo check

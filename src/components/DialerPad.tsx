@@ -88,6 +88,7 @@ export const DialerPad: React.FC<DialerPadProps> = ({
       <div className="flex flex-col items-center justify-center my-2 relative">
         <div className="w-full flex items-center justify-center px-4 min-h-[48px]">
           <span
+            data-testid="dial-display"
             className={`font-mono font-medium tracking-wider text-zinc-100 transition-all text-center break-all ${
               inputNumber.length > 14
                 ? 'text-xl'

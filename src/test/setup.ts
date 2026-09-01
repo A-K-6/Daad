@@ -1,0 +1,54 @@
+import '@testing-library/jest-dom';
+import { afterEach, vi } from 'vitest';
+import { cleanup } from '@testing-library/react';
+
+afterEach(() => {
+  cleanup();
+});
+
+// Mock Web Audio API
+class MockAudioContext {
+  currentTime = 0;
+  state = 'running';
+  destination = {};
+
+  createOscillator() {
+    return {
+      type: 'sine',
+      frequency: {
+        setValueAtTime: vi.fn(),
+      },
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+    };
+  }
+
+  createGain() {
+    return {
+      gain: {
+        setValueAtTime: vi.fn(),
+        exponentialRampToValueAtTime: vi.fn(),
+      },
+      connect: vi.fn(),
+    };
+  }
+
+  resume = vi.fn().mockResolvedValue(undefined);
+}
+
+// @ts-ignore
+window.AudioContext = MockAudioContext;
+// @ts-ignore
+window.webkitAudioContext = MockAudioContext;
+
+// Mock WebRTC MediaStream
+class MockMediaStream {
+  tracks: any[] = [];
+  addTrack(t: any) { this.tracks.push(t); }
+  getTracks() { return this.tracks; }
+  getAudioTracks() { return this.tracks; }
+}
+
+// @ts-ignore
+window.MediaStream = MockMediaStream;

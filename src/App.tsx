@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSip } from './hooks/useSip';
 import { StatusBar } from './components/StatusBar';
+import { LoginView } from './components/LoginView';
 import { DialerPad } from './components/DialerPad';
 import { ActiveCallView } from './components/ActiveCallView';
 import { IncomingCallModal } from './components/IncomingCallModal';
@@ -26,10 +27,14 @@ export const App: React.FC = () => {
   } = useSip();
 
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [hasLoggedIn, setHasLoggedIn] = useState<boolean>(() => {
+    return Boolean(config.serverUrl && config.username && config.password);
+  });
 
   // Auto connect if credentials exist on initial mount
   useEffect(() => {
     if (config.serverUrl && config.username && config.password) {
+      setHasLoggedIn(true);
       connect(config).catch((e) => {
         console.warn('Initial SIP auto-connect failed:', e);
       });
@@ -37,12 +42,23 @@ export const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSaveAndConnect = async (newConfig: SipConfig) => {
-    setShowSettings(false);
+  const handleLogin = async (newConfig: SipConfig) => {
+    setHasLoggedIn(true);
     await connect(newConfig);
   };
 
-  const handleDisconnect = async () => {
+  const handleLogout = async () => {
+    await disconnect();
+    setHasLoggedIn(false);
+  };
+
+  const handleSaveAndConnect = async (newConfig: SipConfig) => {
+    setShowSettings(false);
+    setHasLoggedIn(true);
+    await connect(newConfig);
+  };
+
+  const handleDisconnectFromSettings = async () => {
     await disconnect();
     setShowSettings(false);
   };
@@ -57,33 +73,45 @@ export const App: React.FC = () => {
   return (
     <div className="flex justify-center items-center min-h-screen bg-[#090a0f]">
       <div className="flex flex-col h-screen max-h-[100dvh] w-full max-w-md bg-[#0f1117] text-zinc-100 relative overflow-hidden font-sans select-none shadow-2xl sm:border-x sm:border-[#232838]">
-        {/* Top Status Bar */}
-        <StatusBar
-          connectionState={connectionState}
-          connectionError={connectionError}
-          config={config}
-          onOpenSettings={() => setShowSettings(true)}
-        />
-
-        {/* Main Dialer or In-Call Interface */}
-        <main className="flex-1 relative overflow-hidden flex flex-col">
-          {isCallActiveOrOutgoing ? (
-            <ActiveCallView
-              callState={callState}
-              callInfo={callInfo}
-              onHangup={hangup}
-              onToggleMute={toggleMute}
-              onToggleHold={toggleHold}
-              onSendDtmf={sendDTMF}
-            />
-          ) : (
-            <DialerPad
+        {!hasLoggedIn ? (
+          <LoginView
+            initialConfig={config}
+            connectionState={connectionState}
+            connectionError={connectionError}
+            onLogin={handleLogin}
+          />
+        ) : (
+          <>
+            {/* Top Status Bar */}
+            <StatusBar
               connectionState={connectionState}
-              onCall={makeCall}
+              connectionError={connectionError}
+              config={config}
               onOpenSettings={() => setShowSettings(true)}
+              onLogout={handleLogout}
             />
-          )}
-        </main>
+
+            {/* Main Dialer or In-Call Interface */}
+            <main className="flex-1 relative overflow-hidden flex flex-col">
+              {isCallActiveOrOutgoing ? (
+                <ActiveCallView
+                  callState={callState}
+                  callInfo={callInfo}
+                  onHangup={hangup}
+                  onToggleMute={toggleMute}
+                  onToggleHold={toggleHold}
+                  onSendDtmf={sendDTMF}
+                />
+              ) : (
+                <DialerPad
+                  connectionState={connectionState}
+                  onCall={makeCall}
+                  onOpenSettings={() => setShowSettings(true)}
+                />
+              )}
+            </main>
+          </>
+        )}
 
         {/* Incoming Call Overlay */}
         {isIncomingCallRinging && (
@@ -101,7 +129,7 @@ export const App: React.FC = () => {
             connectionState={connectionState}
             connectionError={connectionError}
             onSaveAndConnect={handleSaveAndConnect}
-            onDisconnect={handleDisconnect}
+            onDisconnect={handleDisconnectFromSettings}
             onClose={() => setShowSettings(false)}
           />
         )}

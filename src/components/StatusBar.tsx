@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, Phone, AlertCircle } from 'lucide-react';
+import { Settings, Phone, AlertCircle, LogOut } from 'lucide-react';
 import { ConnectionState, SipConfig } from '../types/sip';
 
 interface StatusBarProps {
@@ -7,6 +7,7 @@ interface StatusBarProps {
   connectionError: string | null;
   config: SipConfig;
   onOpenSettings: () => void;
+  onLogout?: () => void;
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
@@ -14,6 +15,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   connectionError,
   config,
   onOpenSettings,
+  onLogout,
 }) => {
   const getStatusColor = () => {
     switch (connectionState) {
@@ -51,7 +53,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         </div>
         <div className="min-w-0">
           <div className="flex items-center space-x-1.5">
-            <span className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
+            <span data-testid="status-dot" className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
             <h1 className="text-xs font-semibold tracking-wider text-zinc-100 uppercase truncate">
               {getStatusText()}
             </h1>
@@ -81,6 +83,15 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         >
           <Settings className="w-4 h-4" />
         </button>
+        {onLogout && (connectionState === 'Registered' || connectionState === 'Connecting') && (
+          <button
+            onClick={onLogout}
+            className="p-2 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
+            title="Log Out / Disconnect"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </header>
   );
