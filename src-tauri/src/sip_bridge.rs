@@ -204,7 +204,7 @@ impl SipBridgeManager {
         };
 
         let (tcp_read, tcp_write) = tokio::io::split(tcp);
-        Self::bidirectional_forward(ws_stream, tcp_read, tcp_write).await;
+        Self::bidirectional_forward(ws_stream, tcp_read, tcp_write, "TCP").await;
     }
 
     async fn proxy_stream_tls<S>(ws_stream: S, remote_host: &str, remote_port: u16, allow_insecure: bool)
@@ -237,9 +237,11 @@ impl SipBridgeManager {
         };
 
         let connector = TlsConnector::from(Arc::new(config));
-        let server_name = match ServerName::try_from(remote_host.to_string()) {
-            Ok(name) => name,
-            Err(_) => ServerName::try_from("asterisk.local").unwrap(),
+        let server_name = if let Ok(ip) = remote_host.parse::<std::net::IpAddr>() {
+            ServerName::IpAddress(ip.into())
+        } else {
+            ServerName::try_from(remote_host.to_string())
+                .unwrap_or_else(|_| ServerName::try_from("asterisk.local".to_string()).unwrap())
         };
 
         let tls_stream = match connector.connect(server_name, tcp).await {
@@ -251,7 +253,7 @@ impl SipBridgeManager {
         };
 
         let (tls_read, tls_write) = tokio::io::split(tls_stream);
-        Self::bidirectional_forward(ws_stream, tls_read, tls_write).await;
+        Self::bidirectional_forward(ws_stream, tls_read, tls_write, "TLS").await;
     }
 
     async fn proxy_stream_udp<S>(ws_stream: S, remote_host: &str, remote_port: u16)
@@ -292,7 +294,8 @@ impl SipBridgeManager {
                 match sock_recv.recv(&mut buf).await {
                     Ok(n) if n > 0 => {
                         let text = String::from_utf8_lossy(&buf[..n]).to_string();
-                        if ws_sink.send(Message::Text(text.into())).await.is_err() {
+                        let ws_text = text.replace("SIP/2.0/UDP", "SIP/2.0/WS");
+                        if ws_sink.send(Message::Text(ws_text.into())).await.is_err() {
                             break;
                         }
                     }
@@ -307,7 +310,11 @@ impl SipBridgeManager {
             while let Some(Ok(msg)) = ws_stream_reader.next().await {
                 match msg {
                     Message::Text(text) => {
-                        let _ = sock_send.send(text.as_bytes()).await;
+                        let sip_raw = text
+                            .replace("SIP/2.0/WSS", "SIP/2.0/UDP")
+                            .replace("SIP/2.0/WS", "SIP/2.0/UDP")
+                            .replace(";transport=ws", ";transport=udp");
+                        let _ = sock_send.send(sip_raw.as_bytes()).await;
                     }
                     Message::Binary(bin) => {
                         let _ = sock_send.send(&bin).await;
@@ -324,7 +331,7 @@ impl SipBridgeManager {
         }
     }
 
-    async fn bidirectional_forward<S, R, W>(ws_stream: S, mut remote_read: R, mut remote_write: W)
+    async fn bidirectional_forward<S, R, W>(ws_stream: S, mut remote_read: R, mut remote_write: W, transport_tag: &'static str)
     where
         S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
             + SinkExt<Message, Error = tokio_tungstenite::tungstenite::Error>
@@ -334,15 +341,19 @@ impl SipBridgeManager {
         W: AsyncWrite + Unpin + Send + 'static,
     {
         let (mut ws_sink, mut ws_stream_reader) = ws_stream.split();
+        let tag = transport_tag;
 
         // Stream from Remote PBX -> WebSocket Frontend
         let mut remote_to_ws = tokio::spawn(async move {
-            let mut buf = [0u8; 8192];
+            let mut buf = [0u8; 16384];
             loop {
                 match remote_read.read(&mut buf).await {
                     Ok(n) if n > 0 => {
                         let text = String::from_utf8_lossy(&buf[..n]).to_string();
-                        if ws_sink.send(Message::Text(text.into())).await.is_err() {
+                        // Translate PBX native transport back to WS for SIP.js Via check
+                        let ws_text = text
+                            .replace(&format!("SIP/2.0/{}", tag), "SIP/2.0/WS");
+                        if ws_sink.send(Message::Text(ws_text.into())).await.is_err() {
                             break;
                         }
                     }
@@ -356,7 +367,14 @@ impl SipBridgeManager {
             while let Some(Ok(msg)) = ws_stream_reader.next().await {
                 match msg {
                     Message::Text(text) => {
-                        if remote_write.write_all(text.as_bytes()).await.is_err() {
+                        // Translate WS headers to PBX native socket transport (TLS/TCP)
+                        let target_trans = tag.to_lowercase();
+                        let sip_raw = text
+                            .replace("SIP/2.0/WSS", &format!("SIP/2.0/{}", tag))
+                            .replace("SIP/2.0/WS", &format!("SIP/2.0/{}", tag))
+                            .replace(";transport=ws", &format!(";transport={}", target_trans));
+                        
+                        if remote_write.write_all(sip_raw.as_bytes()).await.is_err() {
                             break;
                         }
                     }

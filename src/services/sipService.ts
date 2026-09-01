@@ -155,15 +155,24 @@ class SipService {
 
       const transportServer = await this.resolveServerTransport(config.serverUrl.trim());
 
+      const isTls = config.serverUrl.toLowerCase().includes('5061') || config.serverUrl.toLowerCase().includes('tls');
+      const isTcp = config.serverUrl.toLowerCase().includes('5060') || config.serverUrl.toLowerCase().includes('tcp');
+      const transportType = isTls ? 'tls' : isTcp ? 'tcp' : 'ws';
+
       const userAgentOptions: UserAgentOptions = {
         uri,
         transportOptions: {
           server: transportServer,
-          traceSip: false,
+          traceSip: true,
         },
         authorizationUsername: config.username.trim(),
         authorizationPassword: config.password,
         displayName: config.displayName?.trim() || config.username.trim(),
+        contactName: config.username.trim(),
+        contactParams: {
+          transport: transportType,
+        },
+        hackViaTcp: isTcp || isTls,
         sessionDescriptionHandlerFactory: Web.defaultSessionDescriptionHandlerFactory(),
         sessionDescriptionHandlerFactoryOptions: {
           peerConnectionConfiguration: {
@@ -208,6 +217,10 @@ class SipService {
 
       await this.registerer.register({
         requestDelegate: {
+          onAccept: (response) => {
+            console.log('SIP Registration Accepted by PBX:', response.message.statusCode);
+            this.setConnectionState('Registered');
+          },
           onReject: (response) => {
             console.error('SIP Registration Rejected:', response);
             this.setConnectionState('RegistrationFailed', `Registration rejected (${response.message.statusCode}: ${response.message.reasonPhrase})`);
