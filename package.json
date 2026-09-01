@@ -1,12 +1,14 @@
 {
   "name": "daad",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "dev:phone": "HTTPS=true vite",
-    "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit",
+    "build:fast": "vite build",
+    "build": "tsc --noEmit & vite build & wait",
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "vite preview",

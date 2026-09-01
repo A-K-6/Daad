@@ -12,9 +12,9 @@ env:
   NODE_OPTIONS: '--no-deprecation'
 
 jobs:
-  lint-and-build:
-    name: Frontend & Backend Check
-    runs-on: macos-latest
+  frontend:
+    name: Frontend Check & Tests (Parallel)
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,6 +29,22 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Parallel Build & Typecheck
+        run: bun run build
+
+      - name: Run Automated Test Suite
+        run: bun run test
+
+  backend:
+    name: Rust Backend Check (Parallel)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -36,15 +52,6 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-
-      - name: Install Frontend Dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build Frontend & Typecheck
-        run: bun run build
-
-      - name: Run Automated Unit Tests
-        run: bun run test
 
       - name: Cargo Check Backend
         working-directory: ./src-tauri
