@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Phone, AlertCircle, LogOut, Sparkles } from 'lucide-react';
+import { Settings, AlertCircle, LogOut, Sparkles } from 'lucide-react';
 import { ConnectionState, SipConfig } from '@/types';
 import { updateService } from '@/services';
+import { DaadLogo } from '@/components/DaadLogo';
 
 interface StatusBarProps {
   connectionState: ConnectionState;
@@ -61,9 +62,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   return (
     <header className="flex items-center justify-between px-3.5 py-2.5 bg-[#0e1017] border-b border-white/[0.06] select-none">
       <div className="flex items-center space-x-2.5 min-w-0">
-        <div className="flex items-center justify-center w-6 h-6 rounded-md bg-white/[0.04] border border-white/[0.08] text-emerald-400 shrink-0">
-          <Phone className="w-3 h-3" />
-        </div>
+        <DaadLogo size={24} withGlow={false} />
         <div className="min-w-0">
           <div className="flex items-center space-x-1.5">
             <span data-testid="status-dot" className={`w-1.5 h-1.5 rounded-full ${getStatusDot()}`} />

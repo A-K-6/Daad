@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Phone, Eye, EyeOff, AlertCircle, ChevronDown, ChevronUp, Server, Shield } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, ChevronDown, ChevronUp, Server, Shield } from 'lucide-react';
 import { SipConfig, ConnectionState } from '@/types';
+import { DaadLogo } from '@/components/DaadLogo';
 
 interface LoginViewProps {
   initialConfig: SipConfig;
@@ -101,8 +102,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
     <div className="flex flex-col h-full justify-between p-5 select-none overflow-y-auto bg-[#090a0f]">
       {/* Brand Header */}
       <div className="flex flex-col items-center justify-center pt-3 pb-2">
-        <div className="w-12 h-12 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-emerald-400 shadow-lg mb-2">
-          <Phone className="w-6 h-6" />
+        <div className="mb-2">
+          <DaadLogo size={46} withGlow={true} />
         </div>
         <h1 className="text-base font-semibold text-zinc-100 tracking-tight">Daad Softphone</h1>
         <p className="text-[11px] text-zinc-500 mt-0.5">Sign in with your SIP / PBX account</p>

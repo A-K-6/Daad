@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Download, Terminal, Shield, Cpu, Sparkles, Check, Copy, ExternalLink } from 'lucide-react';
 import { updateService } from '@/services';
+import { DaadLogo } from '@/components/DaadLogo';
 
 export const LandingHero: React.FC = () => {
   const [copiedAsterisk, setCopiedAsterisk] = useState(false);
@@ -53,10 +54,18 @@ allow=!all,opus,ulaw,alaw`;
             <span>v{version} • Tauri v2 + WebRTC</span>
           </div>
 
-          <h1 className="text-4xl lg:text-5xl font-bold tracking-tight text-white">
-            Daad <span className="text-zinc-500 font-normal">/ داد</span>
-          </h1>
-          <p className="text-sm lg:text-base text-zinc-400 max-w-lg leading-relaxed">
+          <div className="flex items-center space-x-3.5 pt-1">
+            <DaadLogo size={52} withGlow={true} />
+            <div>
+              <h1 className="text-3xl lg:text-5xl font-bold tracking-tight text-white">
+                Daad <span className="text-zinc-500 font-normal text-xl lg:text-3xl">/ داد</span>
+              </h1>
+              <p className="text-[11px] lg:text-xs text-emerald-400 font-mono uppercase tracking-wider">
+                Ultra-Fast Telephony & Softphone
+              </p>
+            </div>
+          </div>
+          <p className="text-sm lg:text-base text-zinc-400 max-w-lg leading-relaxed pt-1">
             Ultra-fast, minimal, modern cross-platform softphone. Zero bloat, instant launch, system tray integration, and crystal-clear WebRTC audio.
           </p>
         </div>
