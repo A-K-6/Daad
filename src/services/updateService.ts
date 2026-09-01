@@ -54,27 +54,61 @@ class UpdateService {
     this.notify();
 
     try {
-      // Fetch directly from GitHub Releases API
-      const res = await fetch(`https://api.github.com/repos/${this.repo}/releases/latest`, {
-        headers: { Accept: 'application/vnd.github.v3+json' },
-      });
+      // 1. Fetch releases list from GitHub API
+      let releaseData: any = null;
+      try {
+        const res = await fetch(`https://api.github.com/repos/${this.repo}/releases`, {
+          headers: { Accept: 'application/vnd.github.v3+json' },
+        });
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) {
+            releaseData = list[0];
+          }
+        }
+      } catch (_) {}
 
-      if (!res.ok) {
-        throw new Error(`GitHub Releases error: HTTP ${res.status}`);
+      // 2. Fallback to /releases/latest if list failed
+      if (!releaseData) {
+        const latestRes = await fetch(`https://api.github.com/repos/${this.repo}/releases/latest`, {
+          headers: { Accept: 'application/vnd.github.v3+json' },
+        });
+        if (latestRes.ok) {
+          releaseData = await latestRes.json();
+        }
       }
 
-      const data = await res.json();
-      const latestTag = (data.tag_name || '').replace(/^v/, '');
+      if (!releaseData) {
+        throw new Error('Unable to fetch release information from GitHub.');
+      }
+
+      const latestTag = (releaseData.tag_name || '').replace(/^v/, '');
       const hasUpdate = this.compareVersions(latestTag, this.currentVersion) > 0;
+
+      // Match platform download asset
+      const assets = releaseData.assets || [];
+      const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.userAgent);
+      const isWindows = typeof navigator !== 'undefined' && /Win/i.test(navigator.userAgent);
+
+      let matchedAsset = assets.find((a: any) => {
+        const name = (a?.name || a?.browser_download_url || '').toLowerCase();
+        if (isMac) return name.endsWith('.dmg') || name.includes('aarch64') || name.includes('mac');
+        if (isWindows) return name.endsWith('.exe') || name.endsWith('.msi');
+        return name.endsWith('.appimage') || name.endsWith('.deb');
+      });
+
+      if (!matchedAsset && assets.length > 0) {
+        matchedAsset = assets[0];
+      }
 
       this.updateInfo = {
         currentVersion: this.currentVersion,
         latestVersion: latestTag || this.currentVersion,
         hasUpdate,
-        releaseNotes: data.body || 'No release notes provided.',
-        publishedAt: data.published_at || new Date().toISOString(),
-        releaseUrl: data.html_url || `https://github.com/${this.repo}/releases`,
-        downloadUrl: data.assets?.[0]?.browser_download_url || data.html_url,
+        releaseNotes: releaseData.body || 'No release notes provided.',
+        publishedAt: releaseData.published_at || releaseData.created_at || new Date().toISOString(),
+        releaseUrl: releaseData.html_url || `https://github.com/${this.repo}/releases`,
+        downloadUrl: matchedAsset?.browser_download_url || releaseData.html_url,
       };
 
       this.status = hasUpdate ? 'available' : 'up-to-date';
@@ -90,7 +124,7 @@ class UpdateService {
   }
 
   public async installUpdate(): Promise<void> {
-    if (this.status !== 'available' || !this.updateInfo) return;
+    if (!this.updateInfo) return;
 
     this.status = 'ready';
     this.notify();
@@ -101,7 +135,7 @@ class UpdateService {
     }
   }
 
-  private compareVersions(v1: string, v2: string): number {
+  public compareVersions(v1: string, v2: string): number {
     const parse = (v: string) => v.split('.').map((n) => parseInt(n, 10) || 0);
     const p1 = parse(v1);
     const p2 = parse(v2);
