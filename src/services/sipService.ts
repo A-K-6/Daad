@@ -66,6 +66,12 @@ class SipService {
   private incomingInvitation: Invitation | null = null;
   private currentConfig: SipConfig | null = null;
 
+  // Serializes connectAndRegister/disconnect so only a single UserAgent +
+  // Registerer is ever live. Prevents a duplicate REGISTER (e.g. from a
+  // concurrent auto-reconnect + manual login) from overwriting the correct
+  // WebSocket binding with a stale/older one.
+  private lifecycleGate: Promise<void> | null = null;
+
   private connectionState: ConnectionState = 'Disconnected';
   private callState: CallState = 'Idle';
   private callInfo: CallInfo | null = null;
@@ -178,12 +184,26 @@ class SipService {
 
   /**
    * Connect to WSS server and Register SIP Account
+   *
+   * Serialized through {@link lifecycleGate} so a competing connect (auto-reconnect,
+   * manual login) cannot spin up a second UserAgent/Registerer that overwrites the
+   * primary WebSocket registration.
    */
   public async connectAndRegister(config: SipConfig): Promise<void> {
+    const run = this.lifecycleGate ? this.lifecycleGate.then(() => undefined) : Promise.resolve();
+    this.lifecycleGate = run
+      .then(() => this.connectAndRegisterInternal(config))
+      .finally(() => {
+        this.lifecycleGate = null;
+      });
+    return this.lifecycleGate;
+  }
+
+  private async connectAndRegisterInternal(config: SipConfig): Promise<void> {
     try {
       this.shouldAutoReconnect = true;
       this.clearReconnectTimer();
-      await this.disconnect(false);
+      await this.teardown(false);
 
       this.currentConfig = config;
       this.setConnectionState('Connecting');
@@ -250,9 +270,23 @@ class SipService {
   }
 
   /**
-   * Disconnect and teardown SIP client
+   * Disconnect and teardown SIP client.
+   *
+   * Waits for any in-flight connect to settle first so we never tear down a
+   * half-built UserAgent or leave a second Registerer alive.
    */
   public async disconnect(stopAutoReconnect: boolean = true): Promise<void> {
+    if (this.lifecycleGate) {
+      try {
+        await this.lifecycleGate;
+      } catch {
+        // A failed connect may have rejected; proceed with teardown regardless.
+      }
+    }
+    await this.teardown(stopAutoReconnect);
+  }
+
+  private async teardown(stopAutoReconnect: boolean = true): Promise<void> {
     if (stopAutoReconnect) {
       this.shouldAutoReconnect = false;
       this.clearReconnectTimer();

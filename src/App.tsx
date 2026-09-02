@@ -12,7 +12,9 @@ import {
   LandingHero,
 } from '@/components';
 import { SipConfig } from '@/types';
+import { updateService } from '@/services';
 import { Phone, Clock, Sun, Moon } from 'lucide-react';
+
 import { Button } from '@fluentui/react-components';
 
 const ThemeToggle: React.FC = () => {
@@ -71,6 +73,17 @@ const MainSoftphone: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Background update check on startup
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      updateService.checkForUpdates().catch((err) => {
+        console.warn('Background update check failed:', err);
+      });
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
 
   const handleSaveAndConnect = async (newConfig: SipConfig) => {
     setShowSettings(false);

@@ -1,8 +1,9 @@
 {
   "name": "daad",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.4.0",
   "type": "module",
+
   "scripts": {
     "dev": "vite",
     "dev:phone": "HTTPS=true vite",

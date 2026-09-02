@@ -106,12 +106,52 @@
 
 /* Audio waveform animation */
 @keyframes wave-pulse {
-  0%, 100% { height: 6px; }
-  50% { height: 28px; }
+  0%, 100% { height: 4px; opacity: 0.4; }
+  50% { height: 26px; opacity: 1; }
 }
 
-.animate-wave-1 { animation: wave-pulse 1.2s infinite ease-in-out 0.1s; }
-.animate-wave-2 { animation: wave-pulse 1.2s infinite ease-in-out 0.3s; }
-.animate-wave-3 { animation: wave-pulse 1.2s infinite ease-in-out 0.2s; }
-.animate-wave-4 { animation: wave-pulse 1.2s infinite ease-in-out 0.4s; }
-.animate-wave-5 { animation: wave-pulse 1.2s infinite ease-in-out 0.15s; }
+.animate-wave-1 { animation: wave-pulse 1.1s infinite ease-in-out 0.1s; }
+.animate-wave-2 { animation: wave-pulse 0.9s infinite ease-in-out 0.25s; }
+.animate-wave-3 { animation: wave-pulse 1.3s infinite ease-in-out 0.05s; }
+.animate-wave-4 { animation: wave-pulse 0.8s infinite ease-in-out 0.35s; }
+.animate-wave-5 { animation: wave-pulse 1.0s infinite ease-in-out 0.18s; }
+.animate-wave-6 { animation: wave-pulse 1.2s infinite ease-in-out 0.28s; }
+.animate-wave-7 { animation: wave-pulse 0.95s infinite ease-in-out 0.12s; }
+
+/* Concentric radar ring animation for ringing and calling */
+@keyframes radar-ring {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1.65);
+    opacity: 0;
+  }
+}
+
+.animate-radar-1 {
+  animation: radar-ring 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+.animate-radar-2 {
+  animation: radar-ring 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite 0.75s;
+}
+
+.animate-radar-3 {
+  animation: radar-ring 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite 1.5s;
+}
+
+/* Subtle live call dot blink */
+@keyframes live-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.85); }
+}
+
+.animate-live-dot {
+  animation: live-dot 1.5s ease-in-out infinite;
+}
+

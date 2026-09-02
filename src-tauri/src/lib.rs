@@ -29,13 +29,40 @@ async fn stop_sip_bridge(
     Ok(())
 }
 
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("cmd")
+            .args(&["/C", "start", "", &url])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let bridge_manager = Arc::new(SipBridgeManager::new());
 
     tauri::Builder::default()
         .manage(bridge_manager)
-        .invoke_handler(tauri::generate_handler![start_sip_bridge, stop_sip_bridge])
+        .invoke_handler(tauri::generate_handler![start_sip_bridge, stop_sip_bridge, open_url])
+
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

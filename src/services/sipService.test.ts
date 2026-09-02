@@ -34,6 +34,18 @@ describe('SipService', () => {
     expect(sipService.getConnectionState()).toBe('RegistrationFailed');
   });
 
+  it('should not leave the lifecycle gate stuck after a failed connect', async () => {
+    await expect(
+      sipService.connectAndRegister({ ...sampleConfig, sipUri: 'invalid-uri-without-scheme' })
+    ).rejects.toThrow();
+
+    await expect(
+      sipService.connectAndRegister({ ...sampleConfig, sipUri: 'also-invalid' })
+    ).rejects.toThrow();
+
+    expect(sipService.getConnectionState()).toBe('RegistrationFailed');
+  });
+
   it('should notify listeners on connection state changes', () => {
     const listener = vi.fn();
     const unsubscribe = sipService.onConnectionStateChange(listener);

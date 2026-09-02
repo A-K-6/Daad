@@ -111,4 +111,54 @@ describe('ActiveCallView Component', () => {
     fireEvent.click(doneBtn);
     expect(screen.queryByText('DTMF Keypad')).not.toBeInTheDocument();
   });
+
+  it('renders muted warning banner when call is muted', () => {
+    render(
+      <ActiveCallView
+        callState="Active"
+        callInfo={{ ...sampleCallInfo, isMuted: true }}
+        onHangup={vi.fn()}
+        onToggleMute={vi.fn()}
+        onToggleHold={vi.fn()}
+        onSendDtmf={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Microphone is muted')).toBeInTheDocument();
+  });
+
+  it('renders call on hold banner when call is held', () => {
+    render(
+      <ActiveCallView
+        callState="Holding"
+        callInfo={{ ...sampleCallInfo, isHeld: true }}
+        onHangup={vi.fn()}
+        onToggleMute={vi.fn()}
+        onToggleHold={vi.fn()}
+        onSendDtmf={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Call on hold • Audio paused')).toBeInTheDocument();
+    expect(screen.getByText('On Hold')).toBeInTheDocument();
+  });
+
+  it('opens and closes audio device selector menu', () => {
+    render(
+      <ActiveCallView
+        callState="Active"
+        callInfo={sampleCallInfo}
+        onHangup={vi.fn()}
+        onToggleMute={vi.fn()}
+        onToggleHold={vi.fn()}
+        onSendDtmf={vi.fn()}
+      />
+    );
+
+    const audioBtn = screen.getByTitle('Audio Devices');
+    fireEvent.click(audioBtn);
+
+    expect(screen.getByText('Audio Output')).toBeInTheDocument();
+  });
 });
+

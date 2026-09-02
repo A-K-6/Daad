@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, RefreshCw, Sparkles, CheckCircle2, AlertTriangle, ExternalLink, Download } from 'lucide-react';
-import { updateService, UpdateStatus, UpdateInfo } from '@/services/updateService';
+import { updateService, UpdateStatus, UpdateInfo, openExternalUrl } from '@/services/updateService';
+
 import { Button } from '@fluentui/react-components';
 
 interface UpdateModalProps {
@@ -135,10 +136,10 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ onClose }) => {
           <>
             <Button
               appearance="secondary"
-              as="a"
-              href={updateInfo?.releaseUrl}
-              target="_blank"
-              rel="noreferrer"
+              onClick={() => {
+                const url = updateInfo?.releaseUrl;
+                if (url) openExternalUrl(url);
+              }}
               icon={{ children: <ExternalLink className="w-3.5 h-3.5" /> }}
             >
               Notes
@@ -149,10 +150,11 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ onClose }) => {
               style={{ flex: 1, fontWeight: 600 }}
               icon={{ children: <Download className="w-3.5 h-3.5" /> }}
             >
-              Update & Restart
+              Download Update (v{updateInfo?.latestVersion})
             </Button>
           </>
         ) : (
+
           <>
             <Button
               appearance="secondary"

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DialerPad } from './DialerPad';
+
 
 describe('DialerPad Component', () => {
   it('renders all 12 keypad buttons correctly', () => {
@@ -98,4 +99,56 @@ describe('DialerPad Component', () => {
     fireEvent.keyDown(window, { key: 'Enter' });
     expect(handleCall).toHaveBeenCalledWith('911');
   });
+
+  it('redials last called number when redial button is clicked', async () => {
+    const { callHistoryService } = await import('@/services');
+    callHistoryService.addRecord({
+      target: '1005',
+      displayName: 'Echo Test',
+      direction: 'outgoing',
+      status: 'answered',
+      duration: 12,
+    });
+
+    render(
+      <DialerPad
+        connectionState="Registered"
+        onCall={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />
+    );
+
+    const redialBtn = screen.getByTitle('Redial 1005');
+    fireEvent.click(redialBtn);
+
+    const display = screen.getByTestId('dial-display');
+    expect(display).toHaveTextContent('1005');
+  });
+
+  it('handles long press on 0 to insert +', () => {
+    vi.useFakeTimers();
+    render(
+      <DialerPad
+        connectionState="Registered"
+        onCall={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />
+    );
+
+    const zeroBtn = screen.getByText('0').closest('button')!;
+    fireEvent.mouseDown(zeroBtn);
+
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+
+    fireEvent.mouseUp(zeroBtn);
+    fireEvent.click(zeroBtn);
+
+    const display = screen.getByTestId('dial-display');
+    expect(display).toHaveTextContent('+');
+    vi.useRealTimers();
+  });
 });
+
+

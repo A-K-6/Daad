@@ -10,8 +10,29 @@ export interface UpdateInfo {
 
 export type UpdateStatus = 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'ready' | 'error';
 
+/**
+ * Open external URL safely in the system default browser or file handler.
+ * In desktop Tauri, invokes the native `open_url` command; in web, uses window.open.
+ */
+export async function openExternalUrl(url: string): Promise<void> {
+  if (!url) return;
+  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_url', { url });
+      return;
+    } catch (err) {
+      console.warn('Tauri open_url failed, falling back to window.open:', err);
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
+
 class UpdateService {
-  private currentVersion = '0.3.1';
+  private currentVersion = '0.4.0';
   private repo = 'A-K-6/Daad';
   private status: UpdateStatus = 'idle';
   private updateInfo: UpdateInfo | null = null;
@@ -54,28 +75,51 @@ class UpdateService {
     this.notify();
 
     try {
-      // 1. Fetch releases list from GitHub API
       let releaseData: any = null;
-      try {
-        const res = await fetch(`https://api.github.com/repos/${this.repo}/releases`, {
-          headers: { Accept: 'application/vnd.github.v3+json' },
-        });
-        if (res.ok) {
-          const list = await res.json();
-          if (Array.isArray(list) && list.length > 0) {
-            releaseData = list[0];
-          }
-        }
-      } catch (_) {}
 
-      // 2. Fallback to /releases/latest if list failed
-      if (!releaseData) {
+      // 1. Try /releases/latest endpoint
+      try {
         const latestRes = await fetch(`https://api.github.com/repos/${this.repo}/releases/latest`, {
           headers: { Accept: 'application/vnd.github.v3+json' },
         });
         if (latestRes.ok) {
           releaseData = await latestRes.json();
         }
+      } catch (_) {}
+
+      // 2. Try /releases list endpoint
+      if (!releaseData) {
+        try {
+          const res = await fetch(`https://api.github.com/repos/${this.repo}/releases`, {
+            headers: { Accept: 'application/vnd.github.v3+json' },
+          });
+          if (res.ok) {
+            const list = await res.json();
+            if (Array.isArray(list) && list.length > 0) {
+              releaseData = list.find((r: any) => !r.draft && !r.prerelease) || list[0];
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 3. Fallback to raw package.json if GitHub API hits rate limit (403)
+      if (!releaseData) {
+        try {
+          const rawRes = await fetch(`https://raw.githubusercontent.com/${this.repo}/main/package.json`);
+          if (rawRes.ok) {
+            const pkg = await rawRes.json();
+            if (pkg.version) {
+              releaseData = {
+                tag_name: `v${pkg.version}`,
+                name: `Daad Softphone v${pkg.version}`,
+                body: 'A new version of Daad Softphone is available on GitHub.',
+                published_at: new Date().toISOString(),
+                html_url: `https://github.com/${this.repo}/releases`,
+                assets: [],
+              };
+            }
+          }
+        } catch (_) {}
       }
 
       if (!releaseData) {
@@ -85,17 +129,29 @@ class UpdateService {
       const latestTag = (releaseData.tag_name || '').replace(/^v/, '');
       const hasUpdate = this.compareVersions(latestTag, this.currentVersion) > 0;
 
-      // Match platform download asset
+      // Match platform download asset with exact priority
       const assets = releaseData.assets || [];
-      const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.userAgent);
-      const isWindows = typeof navigator !== 'undefined' && /Win/i.test(navigator.userAgent);
+      const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+      const isMac = /Mac|iPhone|iPad/i.test(userAgent);
+      const isWindows = /Win/i.test(userAgent);
 
-      let matchedAsset = assets.find((a: any) => {
-        const name = (a?.name || a?.browser_download_url || '').toLowerCase();
-        if (isMac) return name.endsWith('.dmg') || name.includes('aarch64') || name.includes('mac');
-        if (isWindows) return name.endsWith('.exe') || name.endsWith('.msi');
-        return name.endsWith('.appimage') || name.endsWith('.deb');
-      });
+      let matchedAsset: any = null;
+      if (isMac) {
+        matchedAsset =
+          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.dmg')) ||
+          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.pkg')) ||
+          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.app.tar.gz'));
+      } else if (isWindows) {
+        matchedAsset =
+          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('-setup.exe')) ||
+          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.exe')) ||
+          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.msi'));
+      } else {
+        matchedAsset =
+          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.appimage')) ||
+          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.deb')) ||
+          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.rpm'));
+      }
 
       if (!matchedAsset && assets.length > 0) {
         matchedAsset = assets[0];
@@ -131,7 +187,7 @@ class UpdateService {
 
     const targetUrl = this.updateInfo.downloadUrl || this.updateInfo.releaseUrl;
     if (targetUrl) {
-      window.open(targetUrl, '_blank');
+      await openExternalUrl(targetUrl);
     }
   }
 
@@ -151,3 +207,4 @@ class UpdateService {
 }
 
 export const updateService = new UpdateService();
+
