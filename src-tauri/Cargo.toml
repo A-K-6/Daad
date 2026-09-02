@@ -1,6 +1,6 @@
 [package]
 name = "daad"
-version = "0.2.1"
+version = "0.3.0"
 description = "Daad Softphone Desktop"
 authors = ["Daad Team"]
 edition = "2021"

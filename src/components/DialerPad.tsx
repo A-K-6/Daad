@@ -88,7 +88,7 @@ export const DialerPad: React.FC<DialerPadProps> = ({
         <div className="w-full flex items-center justify-center px-2 min-h-[52px]">
           <span
             data-testid="dial-display"
-            className={`font-mono font-medium tracking-wider text-zinc-100 transition-all text-center break-all ${
+            className={`font-mono font-medium tracking-wider text-[var(--fg-1)] transition-all text-center break-all ${
               inputNumber.length > 14
                 ? 'text-xl'
                 : inputNumber.length > 9
@@ -97,7 +97,7 @@ export const DialerPad: React.FC<DialerPadProps> = ({
             }`}
           >
             {inputNumber || (
-              <span className="text-zinc-600 font-sans text-base font-normal">Enter number...</span>
+              <span className="text-[var(--fg-disabled)] font-sans text-base font-normal">Enter number...</span>
             )}
           </span>
         </div>
@@ -106,14 +106,14 @@ export const DialerPad: React.FC<DialerPadProps> = ({
           <div className="flex items-center space-x-2 mt-1">
             <button
               onClick={handleBackspace}
-              className="p-1 text-zinc-500 hover:text-zinc-200 transition-colors rounded"
+              className="p-1 text-[var(--fg-3)] hover:text-[var(--fg-1)] transition-colors rounded"
               title="Backspace"
             >
               <Delete className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={handleClear}
-              className="px-1.5 py-0.5 text-[10px] text-zinc-500 hover:text-zinc-300 font-mono uppercase transition-colors"
+              className="px-1.5 py-0.5 text-[11px] text-[var(--fg-3)] hover:text-[var(--fg-1)] font-mono uppercase transition-colors"
               title="Clear"
             >
               Clear
@@ -128,13 +128,13 @@ export const DialerPad: React.FC<DialerPadProps> = ({
           <button
             key={digit}
             onClick={() => handleKeyPress(digit)}
-            className="flex flex-col items-center justify-center h-13 rounded-xl bg-[#13151f] hover:bg-[#1a1c2a] active:bg-[#222538] active:scale-[0.96] border border-white/[0.06] hover:border-white/[0.12] transition-all shadow-sm group"
+            className="flex flex-col items-center justify-center h-13 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-4)] active:bg-[var(--surface-4)] active:scale-[0.96] border border-[var(--stroke-2)] hover:border-[var(--stroke-1)] transition-all shadow-[var(--shadow-2)] group"
           >
-            <span className="text-lg font-medium text-zinc-100 group-hover:text-emerald-400 transition-colors leading-none">
+            <span className="text-lg font-medium text-[var(--fg-1)] group-hover:text-[var(--accent)] transition-colors leading-none">
               {digit}
             </span>
             {letters ? (
-              <span className="text-[8px] font-semibold text-zinc-500 tracking-wider uppercase mt-1 leading-none">
+              <span className="text-[8px] font-semibold text-[var(--fg-3)] tracking-wider uppercase mt-1 leading-none">
                 {letters}
               </span>
             ) : (
@@ -149,10 +149,10 @@ export const DialerPad: React.FC<DialerPadProps> = ({
         <button
           onClick={handleDial}
           disabled={!inputNumber.trim()}
-          className={`flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition-all active:scale-95 ${
+          className={`flex items-center justify-center w-14 h-14 rounded-full shadow-[var(--shadow-8)] transition-all active:scale-95 ${
             inputNumber.trim()
-              ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-emerald-500/20 hover:shadow-emerald-500/35 cursor-pointer'
-              : 'bg-white/[0.04] text-zinc-600 cursor-not-allowed border border-white/[0.06]'
+              ? 'bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)] cursor-pointer'
+              : 'bg-[var(--surface-4)] text-[var(--fg-disabled)] cursor-not-allowed border border-[var(--stroke-2)]'
           }`}
           title={
             connectionState === 'Registered'

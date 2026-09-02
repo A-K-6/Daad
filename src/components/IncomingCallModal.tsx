@@ -16,22 +16,22 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
   if (!callInfo) return null;
 
   return (
-    <div className="absolute inset-0 z-40 bg-[#0f1117]/95 backdrop-blur-md flex flex-col justify-between p-6 select-none animate-in fade-in zoom-in-95 duration-200">
+    <div className="absolute inset-0 z-40 bg-[var(--surface-1)]/95 backdrop-blur-md flex flex-col justify-between p-6 select-none">
       <div className="flex flex-col items-center justify-center pt-10">
         <div className="relative mb-6">
-          <div className="w-24 h-24 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 text-emerald-400 flex items-center justify-center relative z-10 animate-bounce">
+          <div className="w-24 h-24 rounded-full bg-[var(--info-bg)] border-2 border-[var(--accent)] text-[var(--accent)] flex items-center justify-center relative z-10 animate-bounce">
             <PhoneCall className="w-10 h-10" />
           </div>
-          <div className="absolute inset-0 rounded-full border border-emerald-500/40 animate-ping" />
+          <div className="absolute inset-0 rounded-full border border-[var(--accent)] animate-ping" />
         </div>
 
-        <span className="text-xs uppercase font-semibold tracking-wider text-emerald-400 mb-1">
+        <span className="text-xs uppercase font-semibold tracking-wider text-[var(--accent)] mb-1">
           Incoming Call
         </span>
-        <h2 className="text-2xl font-bold text-zinc-100 text-center px-4 truncate max-w-full">
+        <h2 className="text-2xl font-bold text-[var(--fg-1)] text-center px-4 truncate max-w-full">
           {callInfo.remoteIdentity || 'Unknown Caller'}
         </h2>
-        <p className="text-xs text-zinc-500 mt-1 truncate max-w-[280px]">
+        <p className="text-xs text-[var(--fg-3)] mt-1 truncate max-w-[280px]">
           {callInfo.remoteUri}
         </p>
       </div>
@@ -41,24 +41,24 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
         <div className="flex flex-col items-center space-y-2">
           <button
             onClick={onDecline}
-            className="flex items-center justify-center w-16 h-16 rounded-full bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+            className="flex items-center justify-center w-16 h-16 rounded-full bg-[var(--danger-bg)] text-[var(--danger-fg)] shadow-[var(--shadow-8)] transition-all active:scale-95"
             title="Decline Call"
           >
             <PhoneOff className="w-7 h-7" />
           </button>
-          <span className="text-xs font-medium text-zinc-400">Decline</span>
+          <span className="text-xs font-medium text-[var(--danger-fg)]">Decline</span>
         </div>
 
         {/* Answer Button */}
         <div className="flex flex-col items-center space-y-2">
           <button
             onClick={onAnswer}
-            className="flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-lg shadow-emerald-500/30 transition-all active:scale-95 animate-pulse"
+            className="flex items-center justify-center w-16 h-16 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)] shadow-[var(--shadow-8)] transition-all active:scale-95 animate-pulse"
             title="Answer Call"
           >
             <Phone className="w-7 h-7 fill-current" />
           </button>
-          <span className="text-xs font-medium text-emerald-400">Answer</span>
+          <span className="text-xs font-medium text-[var(--accent)]">Answer</span>
         </div>
       </div>
     </div>

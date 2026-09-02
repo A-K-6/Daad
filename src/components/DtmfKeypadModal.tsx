@@ -1,6 +1,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { soundService } from '@/services';
+import { Button } from '@fluentui/react-components';
 
 interface DtmfKeypadModalProps {
   onSendTone: (tone: string) => void;
@@ -19,12 +20,12 @@ export const DtmfKeypadModal: React.FC<DtmfKeypadModalProps> = ({
   };
 
   return (
-    <div className="absolute inset-0 bg-[#0f1117]/95 backdrop-blur-md z-30 flex flex-col justify-between p-6 select-none animate-in fade-in zoom-in-95 duration-150">
-      <div className="flex items-center justify-between pb-2 border-b border-[#232838]">
-        <h3 className="text-sm font-semibold text-zinc-200">DTMF Keypad</h3>
+    <div className="absolute inset-0 bg-[var(--surface-1)] backdrop-blur-md z-30 flex flex-col justify-between p-6 select-none">
+      <div className="flex items-center justify-between pb-2 border-b border-[var(--stroke-2)]">
+        <h3 className="text-base font-semibold text-[var(--fg-1)]">DTMF Keypad</h3>
         <button
           onClick={onClose}
-          className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#1e2334] rounded-lg transition-colors"
+          className="p-1.5 text-[var(--fg-3)] hover:text-[var(--fg-1)] hover:bg-[var(--surface-4)] rounded-md transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
@@ -35,19 +36,20 @@ export const DtmfKeypadModal: React.FC<DtmfKeypadModalProps> = ({
           <button
             key={key}
             onClick={() => handleKeyClick(key)}
-            className="flex items-center justify-center h-14 rounded-2xl bg-[#181c28] hover:bg-[#222738] active:bg-[#2c334a] border border-[#252b3d] text-xl font-medium text-zinc-100 hover:text-emerald-400 transition-all active:scale-95 shadow-sm"
+            className="flex items-center justify-center h-14 rounded-md bg-[var(--surface-2)] hover:bg-[var(--surface-4)] active:bg-[var(--surface-4)] border border-[var(--stroke-2)] text-xl font-medium text-[var(--fg-1)] hover:text-[var(--accent)] transition-all active:scale-95 shadow-[var(--shadow-2)]"
           >
             {key}
           </button>
         ))}
       </div>
 
-      <button
+      <Button
         onClick={onClose}
-        className="w-full py-2.5 rounded-xl bg-[#181c28] hover:bg-[#202536] text-zinc-300 font-medium text-xs border border-[#252b3d] transition-colors"
+        appearance="secondary"
+        style={{ width: '100%', marginTop: '0.5rem', fontWeight: 500, fontSize: 13 }}
       >
         Done
-      </button>
+      </Button>
     </div>
   );
 };

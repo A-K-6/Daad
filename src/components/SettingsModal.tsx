@@ -4,6 +4,7 @@ import { SipConfig, ConnectionState } from '@/types';
 import { audioDeviceService, AudioDevice } from '@/services/audioDeviceService';
 import { soundService } from '@/services';
 import { updateService } from '@/services';
+import { Button, Input } from '@fluentui/react-components';
 
 interface SettingsModalProps {
   currentConfig: SipConfig;
@@ -83,30 +84,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="absolute inset-0 z-50 bg-[#0f1117]/95 backdrop-blur-md flex flex-col justify-between p-4 select-none animate-in fade-in zoom-in-95 duration-150 overflow-y-auto">
+    <div className="absolute inset-0 z-50 bg-[var(--surface-1)]/95 backdrop-blur-md flex flex-col justify-between p-4 select-none overflow-y-auto">
       {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-[#232838]">
+      <div className="flex items-center justify-between pb-3 border-b border-[var(--stroke-2)]">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-100">Settings</h2>
-          <p className="text-[10px] text-zinc-400">Configure SIP connection and audio devices</p>
+          <h2 className="text-base font-semibold text-[var(--fg-1)]">Settings</h2>
+          <p className="text-[11px] text-[var(--fg-3)]">Configure SIP connection and audio devices</p>
         </div>
         <button
           onClick={onClose}
-          className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#1e2334] rounded-lg transition-colors"
+          className="p-1.5 text-[var(--fg-3)] hover:text-[var(--fg-1)] hover:bg-[var(--surface-4)] rounded-md transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 my-2 p-0.5 bg-[#141824] rounded-lg border border-[#232838]">
+      <div className="flex space-x-1 my-2 p-0.5 bg-[var(--surface-2)] rounded-md border border-[var(--stroke-2)]">
         <button
           type="button"
           onClick={() => setActiveTab('credentials')}
           className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${
             activeTab === 'credentials'
-              ? 'bg-[#1f2538] text-zinc-100 shadow-sm'
-              : 'text-zinc-400 hover:text-zinc-200'
+              ? 'bg-[var(--surface-1)] text-[var(--accent)] shadow-[var(--shadow-2)]'
+              : 'text-[var(--fg-3)] hover:text-[var(--fg-1)]'
           }`}
         >
           Credentials
@@ -116,8 +117,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           onClick={() => setActiveTab('audio')}
           className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${
             activeTab === 'audio'
-              ? 'bg-[#1f2538] text-zinc-100 shadow-sm'
-              : 'text-zinc-400 hover:text-zinc-200'
+              ? 'bg-[var(--surface-1)] text-[var(--accent)] shadow-[var(--shadow-2)]'
+              : 'text-[var(--fg-3)] hover:text-[var(--fg-1)]'
           }`}
         >
           Audio
@@ -127,8 +128,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           onClick={() => setActiveTab('help')}
           className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${
             activeTab === 'help'
-              ? 'bg-[#1f2538] text-zinc-100 shadow-sm'
-              : 'text-zinc-400 hover:text-zinc-200'
+              ? 'bg-[var(--surface-1)] text-[var(--accent)] shadow-[var(--shadow-2)]'
+              : 'text-[var(--fg-3)] hover:text-[var(--fg-1)]'
           }`}
         >
           PBX Guide
@@ -138,8 +139,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           onClick={() => setActiveTab('about')}
           className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${
             activeTab === 'about'
-              ? 'bg-[#1f2538] text-zinc-100 shadow-sm'
-              : 'text-zinc-400 hover:text-zinc-200'
+              ? 'bg-[var(--surface-1)] text-[var(--accent)] shadow-[var(--shadow-2)]'
+              : 'text-[var(--fg-3)] hover:text-[var(--fg-1)]'
           }`}
         >
           About
@@ -150,34 +151,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-3 py-1 text-xs">
           {/* Status Banner */}
           {connectionState === 'RegistrationFailed' && connectionError && (
-            <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px] flex items-start space-x-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+            <div className="p-2.5 rounded-md bg-[var(--danger-bg)] border border-[var(--stroke-2)] text-[var(--danger-fg)] text-[12px] flex items-start space-x-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{connectionError}</span>
             </div>
           )}
 
           {connectionState === 'Registered' && (
-            <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] flex items-center space-x-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+            <div className="p-2.5 rounded-md bg-[var(--success-bg)] border border-[var(--stroke-2)] text-[var(--success-fg)] text-[12px] flex items-center space-x-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>Registered to {formData.sipUri}</span>
             </div>
           )}
 
           {/* Quick Presets */}
           <div className="flex items-center justify-between pt-0.5">
-            <span className="text-[10px] text-zinc-400 uppercase font-semibold tracking-wider">Presets</span>
+            <span className="text-[11px] text-[var(--fg-3)] uppercase font-semibold tracking-wider">Presets</span>
             <div className="flex space-x-1.5">
               <button
                 type="button"
                 onClick={() => handleApplyPreset('asterisk')}
-                className="px-2 py-0.5 rounded bg-[#181c28] hover:bg-[#22283a] text-zinc-300 hover:text-emerald-400 border border-[#252b3d] text-[10px] transition-colors"
+                className="px-2 py-0.5 rounded bg-[var(--surface-2)] hover:bg-[var(--surface-4)] text-[var(--fg-2)] hover:text-[var(--accent)] border border-[var(--stroke-2)] text-[11px] transition-colors"
               >
                 Asterisk
               </button>
               <button
                 type="button"
                 onClick={() => handleApplyPreset('freeswitch')}
-                className="px-2 py-0.5 rounded bg-[#181c28] hover:bg-[#22283a] text-zinc-300 hover:text-emerald-400 border border-[#252b3d] text-[10px] transition-colors"
+                className="px-2 py-0.5 rounded bg-[var(--surface-2)] hover:bg-[var(--surface-4)] text-[var(--fg-2)] hover:text-[var(--accent)] border border-[var(--stroke-2)] text-[11px] transition-colors"
               >
                 FreeSWITCH
               </button>
@@ -186,66 +187,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* Server URL */}
           <div>
-            <label className="block text-[11px] font-medium text-zinc-300 mb-1">
+            <label className="block text-[12px] font-medium text-[var(--fg-2)] mb-1">
               WebSocket Server URL (WSS)
             </label>
-            <input
+            <Input
               type="text"
               required
               value={formData.serverUrl}
               onChange={(e) => handleChange('serverUrl', e.target.value)}
               placeholder="wss://pbx.example.com:8089/ws"
-              className="w-full px-2.5 py-1.5 rounded-lg bg-[#141824] border border-[#252b3d] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 font-mono text-xs"
+              appearance="outline"
+              style={{ fontSize: 12, fontFamily: 'var(--font-base)' }}
             />
           </div>
 
           {/* SIP URI */}
           <div>
-            <label className="block text-[11px] font-medium text-zinc-300 mb-1">
+            <label className="block text-[12px] font-medium text-[var(--fg-2)] mb-1">
               SIP Address / URI
             </label>
-            <input
+            <Input
               type="text"
               required
               value={formData.sipUri}
               onChange={(e) => handleChange('sipUri', e.target.value)}
               placeholder="sip:1001@pbx.example.com"
-              className="w-full px-2.5 py-1.5 rounded-lg bg-[#141824] border border-[#252b3d] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 font-mono text-xs"
+              appearance="outline"
+              style={{ fontSize: 12, fontFamily: 'var(--font-base)' }}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-[11px] font-medium text-zinc-300 mb-1">
+              <label className="block text-[12px] font-medium text-[var(--fg-2)] mb-1">
                 Username / Ext
               </label>
-              <input
+              <Input
                 type="text"
                 required
                 value={formData.username}
                 onChange={(e) => handleChange('username', e.target.value)}
                 placeholder="1001"
-                className="w-full px-2.5 py-1.5 rounded-lg bg-[#141824] border border-[#252b3d] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 font-mono text-xs"
+                appearance="outline"
+                style={{ fontSize: 12 }}
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-medium text-zinc-300 mb-1">
+              <label className="block text-[12px] font-medium text-[var(--fg-2)] mb-1">
                 Password / Secret
               </label>
               <div className="relative">
-                <input
+                <Input
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={formData.password}
                   onChange={(e) => handleChange('password', e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-2.5 py-1.5 pr-8 rounded-lg bg-[#141824] border border-[#252b3d] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 text-xs"
+                  appearance="outline"
+                  style={{ fontSize: 12 }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--fg-3)] hover:text-[var(--fg-1)]"
                 >
                   {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
@@ -254,47 +259,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium text-zinc-300 mb-1">
+            <label className="block text-[12px] font-medium text-[var(--fg-2)] mb-1">
               Caller ID Display Name
             </label>
-            <input
+            <Input
               type="text"
               value={formData.displayName || ''}
               onChange={(e) => handleChange('displayName', e.target.value)}
               placeholder="e.g. Front Desk"
-              className="w-full px-2.5 py-1.5 rounded-lg bg-[#141824] border border-[#252b3d] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 text-xs"
+              appearance="outline"
+              style={{ fontSize: 12 }}
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium text-zinc-300 mb-1">
+            <label className="block text-[12px] font-medium text-[var(--fg-2)] mb-1">
               STUN Server (WebRTC ICE)
             </label>
-            <input
+            <Input
               type="text"
               value={formData.stunServer || ''}
               onChange={(e) => handleChange('stunServer', e.target.value)}
               placeholder="stun:stun.l.google.com:19302"
-              className="w-full px-2.5 py-1.5 rounded-lg bg-[#141824] border border-[#252b3d] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 font-mono text-xs"
+              appearance="outline"
+              style={{ fontSize: 12, fontFamily: 'var(--font-base)' }}
             />
           </div>
 
           <div className="pt-2 flex items-center space-x-2">
             {connectionState === 'Registered' || connectionState === 'Connecting' ? (
-              <button
+              <Button
                 type="button"
+                appearance="secondary"
                 onClick={onDisconnect}
-                className="flex-1 py-2 px-3 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 font-medium text-xs transition-colors"
+                style={{ flex: 1, color: 'var(--danger-fg)', fontWeight: 500 }}
               >
                 Disconnect
-              </button>
+              </Button>
             ) : null}
-            <button
+            <Button
               type="submit"
-              className="flex-1 py-2 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-xs shadow-md shadow-emerald-500/20 transition-all active:scale-[0.98]"
+              appearance="primary"
+              style={{ flex: 1, fontWeight: 600 }}
             >
               {connectionState === 'Connecting' ? 'Connecting...' : 'Save & Connect'}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -302,8 +311,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       {activeTab === 'audio' && (
         <div className="py-2 text-xs space-y-4">
           <div>
-            <label className="block text-[11px] font-medium text-zinc-300 mb-1.5 flex items-center space-x-1.5">
-              <Mic className="w-3.5 h-3.5 text-emerald-400" />
+            <label className="block text-[12px] font-medium text-[var(--fg-2)] mb-1.5 flex items-center space-x-1.5">
+              <Mic className="w-3.5 h-3.5 text-[var(--accent)]" />
               <span>Microphone (Input Device)</span>
             </label>
             <select
@@ -312,7 +321,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 setSelectedInput(e.target.value);
                 audioDeviceService.setInputDevice(e.target.value);
               }}
-              className="w-full px-3 py-2 rounded-xl bg-[#141824] border border-[#252b3d] text-zinc-100 text-xs focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 rounded-md bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[var(--fg-1)] text-xs focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             >
               <option value="">Default System Microphone</option>
               {inputDevices.map((dev) => (
@@ -324,8 +333,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium text-zinc-300 mb-1.5 flex items-center space-x-1.5">
-              <Volume2 className="w-3.5 h-3.5 text-sky-400" />
+            <label className="block text-[12px] font-medium text-[var(--fg-2)] mb-1.5 flex items-center space-x-1.5">
+              <Volume2 className="w-3.5 h-3.5 text-[var(--info-fg)]" />
               <span>Speaker (Output Device)</span>
             </label>
             <select
@@ -334,7 +343,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 setSelectedOutput(e.target.value);
                 audioDeviceService.setOutputDevice(e.target.value);
               }}
-              className="w-full px-3 py-2 rounded-xl bg-[#141824] border border-[#252b3d] text-zinc-100 text-xs focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 rounded-md bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[var(--fg-1)] text-xs focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             >
               <option value="">Default System Output</option>
               {outputDevices.map((dev) => (
@@ -345,84 +354,86 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </select>
           </div>
 
-          <div className="p-3 rounded-xl bg-[#141824] border border-[#232838] flex items-center justify-between">
+          <div className="p-3 rounded-md bg-[var(--surface-2)] border border-[var(--stroke-2)] flex items-center justify-between">
             <div>
-              <h4 className="font-semibold text-zinc-200">Speaker Test</h4>
-              <p className="text-[10px] text-zinc-400">Play a test tone to verify output</p>
+              <h4 className="font-semibold text-[var(--fg-1)]">Speaker Test</h4>
+              <p className="text-[11px] text-[var(--fg-3)]">Play a test tone to verify output</p>
             </div>
-            <button
+            <Button
               type="button"
+              appearance="secondary"
               onClick={handleTestAudio}
-              className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs transition-colors"
+              icon={{ children: <Play className="w-3.5 h-3.5" /> }}
+              style={{ color: 'var(--accent)' }}
             >
-              <Play className="w-3.5 h-3.5" />
-              <span>Test</span>
-            </button>
+              Test
+            </Button>
           </div>
         </div>
       )}
 
       {activeTab === 'help' && (
-        <div className="py-2 text-zinc-300 text-xs space-y-3">
-          <div className="p-2.5 rounded-lg bg-[#141824] border border-[#232838] space-y-1.5">
-            <h4 className="font-semibold text-emerald-400 flex items-center space-x-1">
+        <div className="py-2 text-[var(--fg-2)] text-xs space-y-3">
+          <div className="p-2.5 rounded-md bg-[var(--surface-2)] border border-[var(--stroke-2)] space-y-1.5">
+            <h4 className="font-semibold text-[var(--accent)] flex items-center space-x-1">
               <HelpCircle className="w-3.5 h-3.5" />
               <span>Asterisk WebRTC (PJSIP)</span>
             </h4>
-            <p className="text-[11px] text-zinc-400">
-              Ensure <code className="text-zinc-200">http.conf</code> enables <code className="text-zinc-200">tlsenable=yes</code> and <code className="text-zinc-200">pjsip.conf</code> sets <code className="text-zinc-200">webrtc=yes</code>, <code className="text-zinc-200">use_avpf=yes</code>, <code className="text-zinc-200">media_encryption=dtls</code>.
+            <p className="text-[11px] text-[var(--fg-3)]">
+              Ensure <code className="text-[var(--fg-1)]">http.conf</code> enables <code className="text-[var(--fg-1)]">tlsenable=yes</code> and <code className="text-[var(--fg-1)]">pjsip.conf</code> sets <code className="text-[var(--fg-1)]">webrtc=yes</code>, <code className="text-[var(--fg-1)]">use_avpf=yes</code>, <code className="text-[var(--fg-1)]">media_encryption=dtls</code>.
             </p>
           </div>
 
-          <div className="p-2.5 rounded-lg bg-[#141824] border border-[#232838] space-y-1.5">
-            <h4 className="font-semibold text-emerald-400 flex items-center space-x-1">
+          <div className="p-2.5 rounded-md bg-[var(--surface-2)] border border-[var(--stroke-2)] space-y-1.5">
+            <h4 className="font-semibold text-[var(--accent)] flex items-center space-x-1">
               <HelpCircle className="w-3.5 h-3.5" />
               <span>FreeSWITCH WebRTC (Verto / WSS)</span>
             </h4>
-            <p className="text-[11px] text-zinc-400">
-              Ensure <code className="text-zinc-200">sip_profiles/internal.xml</code> has <code className="text-zinc-200">ws-binding</code> or <code className="text-zinc-200">wss-binding=":7443"</code> with valid TLS certificates configured.
+            <p className="text-[11px] text-[var(--fg-3)]">
+              Ensure <code className="text-[var(--fg-1)]">sip_profiles/internal.xml</code> has <code className="text-[var(--fg-1)]">ws-binding</code> or <code className="text-[var(--fg-1)]">wss-binding=":7443"</code> with valid TLS certificates configured.
             </p>
           </div>
 
-          <div className="p-2.5 rounded-lg bg-[#141824] border border-[#232838] space-y-1.5">
-            <h4 className="font-semibold text-zinc-200">Self-Signed Certificates</h4>
-            <p className="text-[11px] text-zinc-400">
-              If using self-signed TLS certificates on your local PBX, open the WSS URL in your browser once (e.g. <code className="text-zinc-200">https://your-pbx:8089/ws</code>) and accept the certificate warning.
+          <div className="p-2.5 rounded-md bg-[var(--surface-2)] border border-[var(--stroke-2)] space-y-1.5">
+            <h4 className="font-semibold text-[var(--fg-1)]">Self-Signed Certificates</h4>
+            <p className="text-[11px] text-[var(--fg-3)]">
+              If using self-signed TLS certificates on your local PBX, open the WSS URL in your browser once (e.g. <code className="text-[var(--fg-1)]">https://your-pbx:8089/ws</code>) and accept the certificate warning.
             </p>
           </div>
         </div>
       )}
 
       {activeTab === 'about' && (
-        <div className="py-2 text-zinc-300 text-xs space-y-3">
-          <div className="p-3 rounded-xl bg-[#141824] border border-[#232838] space-y-2">
+        <div className="py-2 text-[var(--fg-2)] text-xs space-y-3">
+          <div className="p-3 rounded-md bg-[var(--surface-2)] border border-[var(--stroke-2)] space-y-2">
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-zinc-200">Daad Softphone</span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-mono border border-emerald-500/20">
+              <span className="font-semibold text-[var(--fg-1)]">Daad Softphone</span>
+              <span className="px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent)] text-[11px] font-mono">
                 v{updateService.getCurrentVersion()}
               </span>
             </div>
-            <p className="text-[11px] text-zinc-400">
+            <p className="text-[11px] text-[var(--fg-3)]">
               Cross-platform desktop SIP client built with Tauri v2, SIP.js, and React.
             </p>
           </div>
 
-          <div className="p-3 rounded-xl bg-[#141824] border border-[#232838] flex items-center justify-between">
+          <div className="p-3 rounded-md bg-[var(--surface-2)] border border-[var(--stroke-2)] flex items-center justify-between">
             <div>
-              <h4 className="font-semibold text-zinc-200">Auto-Update</h4>
-              <p className="text-[10px] text-zinc-400">Check GitHub for the newest releases</p>
+              <h4 className="font-semibold text-[var(--fg-1)]">Auto-Update</h4>
+              <p className="text-[10px] text-[var(--fg-3)]">Check GitHub for the newest releases</p>
             </div>
-            <button
+            <Button
               type="button"
+              appearance="secondary"
               onClick={() => {
                 onClose();
                 if (onOpenUpdates) onOpenUpdates();
               }}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs transition-colors"
+              icon={{ children: <Sparkles className="w-3.5 h-3.5" /> }}
+              style={{ color: 'var(--accent)' }}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Check Updates</span>
-            </button>
+              Check Updates
+            </Button>
           </div>
         </div>
       )}

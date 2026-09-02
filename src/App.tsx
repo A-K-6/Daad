@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SipProvider, useSip } from '@/context';
+import { SipProvider, useSip, useTheme } from '@/context';
 import {
   StatusBar,
   LoginView,
@@ -12,7 +12,22 @@ import {
   LandingHero,
 } from '@/components';
 import { SipConfig } from '@/types';
-import { Phone, Clock } from 'lucide-react';
+import { Phone, Clock, Sun, Moon } from 'lucide-react';
+import { Button } from '@fluentui/react-components';
+
+const ThemeToggle: React.FC = () => {
+  const { isDark, toggleTheme } = useTheme();
+  return (
+    <Button
+      appearance="subtle"
+      size="large"
+      aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+      title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+      onClick={toggleTheme}
+      icon={{ children: isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" /> }}
+    />
+  );
+};
 
 const MainSoftphone: React.FC = () => {
   const {
@@ -70,7 +85,7 @@ const MainSoftphone: React.FC = () => {
     callState === 'Holding';
 
   const softphoneWidget = (
-    <div className="flex flex-col h-screen max-h-[600px] w-full max-w-[360px] bg-[#0c0e15] text-zinc-100 relative overflow-hidden font-sans select-none shadow-2xl rounded-2xl border border-white/[0.08]">
+    <div className="flex flex-col h-screen max-h-[600px] w-full max-w-[360px] bg-[var(--surface-1)] text-[var(--fg-1)] relative overflow-hidden font-sans select-none rounded-2xl border border-[var(--stroke-2)] shadow-[var(--shadow-8)]">
       {!hasLoggedIn ? (
         <LoginView
           initialConfig={config}
@@ -91,7 +106,7 @@ const MainSoftphone: React.FC = () => {
           />
 
           {/* Main Dialer or In-Call Interface */}
-          <main className="flex-1 relative overflow-hidden flex flex-col bg-[#090a0f]">
+          <main className="flex-1 relative overflow-hidden flex flex-col bg-[var(--surface-1)]">
             {isCallActiveOrOutgoing ? (
               <ActiveCallView
                 callState={callState}
@@ -104,30 +119,30 @@ const MainSoftphone: React.FC = () => {
             ) : (
               <div className="flex flex-col h-full justify-between">
                 {/* Tab Selector */}
-                <div className="flex px-4 pt-2.5 pb-1 space-x-1">
+                <div className="flex p-2 space-x-1 border-b border-[var(--stroke-2)]">
                   <button
                     onClick={() => setActiveDialerTab('keypad')}
-                    className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 rounded-md text-sm font-medium transition-all ${
                       activeDialerTab === 'keypad'
-                        ? 'bg-[#13151f] text-emerald-400 border border-white/[0.08] shadow-sm'
-                        : 'text-zinc-500 hover:text-zinc-300'
+                        ? 'text-[var(--accent)] bg-[var(--surface-2)] border border-[var(--stroke-2)]'
+                        : 'text-[var(--fg-3)] hover:text-[var(--fg-1)]'
                     }`}
                   >
-                    <Phone className="w-3.5 h-3.5" />
+                    <Phone className="w-4 h-4" />
                     <span>Keypad</span>
                   </button>
                   <button
                     onClick={() => setActiveDialerTab('history')}
-                    className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 rounded-md text-sm font-medium transition-all ${
                       activeDialerTab === 'history'
-                        ? 'bg-[#13151f] text-emerald-400 border border-white/[0.08] shadow-sm'
-                        : 'text-zinc-500 hover:text-zinc-300'
+                        ? 'text-[var(--accent)] bg-[var(--surface-2)] border border-[var(--stroke-2)]'
+                        : 'text-[var(--fg-3)] hover:text-[var(--fg-1)]'
                     }`}
                   >
-                    <Clock className="w-3.5 h-3.5" />
+                    <Clock className="w-4 h-4" />
                     <span>Recents</span>
                     {callHistory.length > 0 && (
-                      <span className="ml-1 px-1.5 py-0.2 text-[9px] rounded-full bg-zinc-800 text-zinc-400 font-mono">
+                      <span className="ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-[var(--accent-subtle)] text-[var(--accent)] font-mono">
                         {callHistory.length}
                       </span>
                     )}
@@ -193,7 +208,10 @@ const MainSoftphone: React.FC = () => {
   // If inside native Tauri window, render only the softphone
   if (isTauri) {
     return (
-      <div className="flex justify-center items-center h-screen w-screen bg-[#090a0f] overflow-hidden">
+      <div className="flex justify-center items-center h-screen w-screen bg-[var(--surface-1)] overflow-hidden">
+        <div className="absolute top-4 right-4 z-10">
+          <ThemeToggle />
+        </div>
         {softphoneWidget}
       </div>
     );
@@ -201,7 +219,10 @@ const MainSoftphone: React.FC = () => {
 
   // If on web, render landing showcase page
   return (
-    <div className="min-h-screen w-full bg-[#07080c] flex items-center justify-center p-4 lg:p-12 overflow-x-hidden">
+    <div className="min-h-screen w-full bg-[var(--surface-2)] flex items-center justify-center p-4 lg:p-12 overflow-x-hidden">
+      <div className="absolute top-4 right-4 z-10">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-6xl flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-16">
         <LandingHero />
         <div className="shrink-0 flex items-center justify-center">

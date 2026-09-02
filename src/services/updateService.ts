@@ -11,7 +11,7 @@ export interface UpdateInfo {
 export type UpdateStatus = 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'ready' | 'error';
 
 class UpdateService {
-  private currentVersion = '0.2.1';
+  private currentVersion = '0.3.0';
   private repo = 'A-K-6/Daad';
   private status: UpdateStatus = 'idle';
   private updateInfo: UpdateInfo | null = null;

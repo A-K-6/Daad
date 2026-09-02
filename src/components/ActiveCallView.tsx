@@ -31,43 +31,43 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
   const getStatusBadge = () => {
     switch (callState) {
       case 'Calling':
-        return { text: 'Calling...', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
+        return { text: 'Calling...', color: 'text-[var(--warning-fg)] bg-[var(--warning-bg)]' };
       case 'Ringing':
-        return { text: 'Ringing...', color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' };
+        return { text: 'Ringing...', color: 'text-[var(--info-fg)] bg-[var(--info-bg)]' };
       case 'Holding':
-        return { text: 'On Hold', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
+        return { text: 'On Hold', color: 'text-[var(--warning-fg)] bg-[var(--warning-bg)]' };
       case 'Active':
       default:
-        return { text: 'Connected', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' };
+        return { text: 'Connected', color: 'text-[var(--success-fg)] bg-[var(--success-bg)]' };
     }
   };
 
   const badge = getStatusBadge();
 
   return (
-    <div className="flex flex-col h-full justify-between p-5 select-none relative bg-[#090a0f]">
+    <div className="flex flex-col h-full justify-between p-5 select-none relative bg-[var(--surface-1)]">
       {/* Top Caller Info */}
       <div className="flex flex-col items-center justify-center pt-4">
-        <div className="w-16 h-16 rounded-2xl bg-[#13151f] border border-white/[0.08] flex items-center justify-center text-zinc-400 shadow-lg mb-3">
-          <User className="w-8 h-8 text-zinc-300" />
+        <div className="w-16 h-16 rounded-2xl bg-[var(--surface-2)] border border-[var(--stroke-2)] flex items-center justify-center text-[var(--fg-3)] shadow-[var(--shadow-2)] mb-3">
+          <User className="w-8 h-8 text-[var(--fg-2)]" />
         </div>
 
-        <h2 className="text-base font-semibold text-zinc-100 tracking-wide text-center">
+        <h2 className="text-lg font-semibold text-[var(--fg-1)] tracking-wide text-center">
           {callInfo?.remoteIdentity || 'Remote Party'}
         </h2>
 
         {callInfo?.remoteUri && (
-          <p className="text-[10px] text-zinc-500 font-mono text-center truncate max-w-[240px] mt-0.5">
+          <p className="text-[11px] text-[var(--fg-3)] font-mono text-center truncate max-w-[240px] mt-0.5">
             {callInfo.remoteUri}
           </p>
         )}
 
         <div className="flex items-center space-x-2 mt-2.5">
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${badge.color}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${badge.color}`}>
             {badge.text}
           </span>
           {callState === 'Active' && (
-            <span className="text-xs font-mono font-medium text-zinc-300">
+            <span className="text-sm font-mono font-medium text-[var(--fg-2)]">
               {formatDuration(callInfo?.duration || 0)}
             </span>
           )}
@@ -76,11 +76,11 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
         {/* Audio Equalizer Waveform */}
         {callState === 'Active' && !callInfo?.isHeld && (
           <div className="flex items-center justify-center space-x-1 mt-4 h-7">
-            <span className="w-1 bg-emerald-400/80 rounded-full animate-wave-1" />
-            <span className="w-1 bg-emerald-400/80 rounded-full animate-wave-2" />
-            <span className="w-1 bg-emerald-400/80 rounded-full animate-wave-3" />
-            <span className="w-1 bg-emerald-400/80 rounded-full animate-wave-4" />
-            <span className="w-1 bg-emerald-400/80 rounded-full animate-wave-5" />
+            <span className="w-1 rounded-full animate-wave-1" style={{ backgroundColor: 'var(--accent)', opacity: 0.8 }} />
+            <span className="w-1 rounded-full animate-wave-2" style={{ backgroundColor: 'var(--accent)', opacity: 0.8 }} />
+            <span className="w-1 rounded-full animate-wave-3" style={{ backgroundColor: 'var(--accent)', opacity: 0.8 }} />
+            <span className="w-1 rounded-full animate-wave-4" style={{ backgroundColor: 'var(--accent)', opacity: 0.8 }} />
+            <span className="w-1 rounded-full animate-wave-5" style={{ backgroundColor: 'var(--accent)', opacity: 0.8 }} />
           </div>
         )}
       </div>
@@ -92,14 +92,14 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
           <button
             onClick={onToggleMute}
             title={callInfo?.isMuted ? 'Unmute Mic' : 'Mute Mic'}
-            className={`flex flex-col items-center justify-center h-16 rounded-xl border transition-all active:scale-95 ${
+            className={`flex flex-col items-center justify-center h-16 rounded-md border transition-all active:scale-95 ${
               callInfo?.isMuted
-                ? 'bg-rose-500/15 border-rose-500/30 text-rose-400'
-                : 'bg-[#13151f] hover:bg-[#1a1c2a] border-white/[0.06] text-zinc-300'
+                ? 'bg-[var(--danger-bg)] border-[var(--stroke-2)] text-[var(--danger-fg)]'
+                : 'bg-[var(--surface-2)] hover:bg-[var(--surface-4)] border-[var(--stroke-2)] text-[var(--fg-2)]'
             }`}
           >
             {callInfo?.isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            <span className="text-[9px] font-medium mt-1">
+            <span className="text-[10px] font-medium mt-1">
               {callInfo?.isMuted ? 'Muted' : 'Mute'}
             </span>
           </button>
@@ -109,14 +109,14 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
             onClick={onToggleHold}
             disabled={callState !== 'Active' && callState !== 'Holding'}
             title={callInfo?.isHeld ? 'Resume Call' : 'Hold Call'}
-            className={`flex flex-col items-center justify-center h-16 rounded-xl border transition-all active:scale-95 disabled:opacity-40 ${
+            className={`flex flex-col items-center justify-center h-16 rounded-md border transition-all active:scale-95 disabled:opacity-40 ${
               callInfo?.isHeld
-                ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
-                : 'bg-[#13151f] hover:bg-[#1a1c2a] border-white/[0.06] text-zinc-300'
+                ? 'bg-[var(--warning-bg)] border-[var(--stroke-2)] text-[var(--warning-fg)]'
+                : 'bg-[var(--surface-2)] hover:bg-[var(--surface-4)] border-[var(--stroke-2)] text-[var(--fg-2)]'
             }`}
           >
             {callInfo?.isHeld ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
-            <span className="text-[9px] font-medium mt-1">
+            <span className="text-[10px] font-medium mt-1">
               {callInfo?.isHeld ? 'Unhold' : 'Hold'}
             </span>
           </button>
@@ -125,10 +125,10 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
           <button
             onClick={() => setShowDtmf(true)}
             title="In-Call Keypad"
-            className="flex flex-col items-center justify-center h-16 rounded-xl bg-[#13151f] hover:bg-[#1a1c2a] border border-white/[0.06] text-zinc-300 transition-all active:scale-95"
+            className="flex flex-col items-center justify-center h-16 rounded-md bg-[var(--surface-2)] hover:bg-[var(--surface-4)] border border-[var(--stroke-2)] text-[var(--fg-2)] transition-all active:scale-95"
           >
             <Grid className="w-5 h-5" />
-            <span className="text-[9px] font-medium mt-1">Keypad</span>
+            <span className="text-[10px] font-medium mt-1">Keypad</span>
           </button>
         </div>
 
@@ -137,7 +137,7 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
           <button
             onClick={onHangup}
             title="End Call"
-            className="flex items-center justify-center w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/25 transition-all active:scale-95 cursor-pointer"
+            className="flex items-center justify-center w-14 h-14 rounded-full bg-[var(--danger-fg)] hover:opacity-90 text-[var(--on-accent)] shadow-[var(--shadow-8)] transition-all active:scale-95 cursor-pointer"
           >
             <PhoneOff className="w-5 h-5" />
           </button>

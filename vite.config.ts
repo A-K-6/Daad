@@ -16,7 +16,14 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      tabster: path.resolve(__dirname, './node_modules/tabster/dist/esm/index.js'),
     },
+  },
+  optimizeDeps: {
+    exclude: ['tabster', '@fluentui/react-components'],
+  },
+  ssr: {
+    noExternal: [/@fluentui\//, /@griffel\//, /tabster/],
   },
   base: './',
   clearScreen: false,
@@ -34,6 +41,15 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     testTimeout: 15000,
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      tabster: path.resolve(__dirname, './node_modules/tabster/dist/esm/index.js'),
+    },
+    server: {
+      deps: {
+        inline: [/@fluentui\//, /@griffel\//, /tabster/],
+      },
+    },
   },
   envPrefix: ['VITE_', 'TAURI_'],
   build: {

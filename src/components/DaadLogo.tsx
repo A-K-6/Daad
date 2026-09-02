@@ -21,7 +21,7 @@ export const DaadLogo: React.FC<DaadLogoProps> = ({
       >
         {withGlow && (
           <div
-            className="absolute inset-0 rounded-xl bg-emerald-500/20 blur-md -z-10 animate-pulse"
+            className="absolute inset-0 rounded-xl bg-[var(--accent-subtle)] blur-md -z-10"
             style={{ filter: 'blur(8px)' }}
           />
         )}
@@ -29,58 +29,57 @@ export const DaadLogo: React.FC<DaadLogoProps> = ({
           viewBox="0 0 48 48"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className="w-full h-full drop-shadow-md"
+          className="w-full h-full drop-shadow-sm"
         >
-          {/* Obsidian Beveled Backplate */}
+          {/* Fluent Backplate */}
           <rect
             x="2"
             y="2"
             width="44"
             height="44"
-            rx="12"
-            fill="#0c0e15"
-            stroke="rgba(255, 255, 255, 0.1)"
+            rx="11"
+            fill="var(--surface-2)"
+            stroke="var(--stroke-2)"
             strokeWidth="1.5"
           />
 
-          {/* Geometric Inner Glow */}
+          {/* Geometric Inner Highlight */}
           <rect
             x="3"
             y="3"
             width="42"
             height="42"
-            rx="11"
+            rx="10"
             fill="url(#daad_bg_grad)"
-            opacity="0.4"
+            opacity="0.5"
           />
 
-          {/* Precision Neon Letter 'D' Outer Path */}
+          {/* Precise Letter 'D' Outer Path */}
           <path
             d="M14 12H24C30.6274 12 36 17.3726 36 24C36 30.6274 30.6274 36 24 36H14V12Z"
-            stroke="#10b981"
+            stroke="var(--accent)"
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="text-emerald-400"
           />
 
           {/* Audio Waveform Pulse Passing Through */}
           <path
             d="M10 24H15L17 19L20 29L23 16L26 31L29 20L31 26L33 24H38"
-            stroke="#34d399"
+            stroke="var(--accent)"
             strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
 
           {/* Left Signal Beacon Dot */}
-          <circle cx="10" cy="24" r="1.5" fill="#34d399" />
+          <circle cx="10" cy="24" r="1.5" fill="var(--accent)" />
 
           {/* Gradients */}
           <defs>
             <linearGradient id="daad_bg_grad" x1="2" y1="2" x2="46" y2="46" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#10b981" stopOpacity="0.3" />
-              <stop offset="1" stopColor="#06b6d4" stopOpacity="0.05" />
+              <stop stopColor="var(--accent)" stopOpacity="0.18" />
+              <stop offset="1" stopColor="var(--accent)" stopOpacity="0.03" />
             </linearGradient>
           </defs>
         </svg>
@@ -89,12 +88,12 @@ export const DaadLogo: React.FC<DaadLogoProps> = ({
       {showText && (
         <div className="flex flex-col">
           <div className="flex items-center space-x-1.5">
-            <span className="font-bold tracking-tight text-zinc-100 text-sm font-sans">
+            <span className="font-bold tracking-tight text-[var(--fg-1)] text-sm font-sans">
               DAAD
             </span>
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#10b981]" />
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
           </div>
-          <span className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase -mt-0.5">
+          <span className="text-[10px] text-[var(--fg-3)] font-mono tracking-wider uppercase -mt-0.5">
             Softphone
           </span>
         </div>

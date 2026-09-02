@@ -3,6 +3,7 @@ import { Settings, AlertCircle, LogOut, Sparkles } from 'lucide-react';
 import { ConnectionState, SipConfig } from '@/types';
 import { updateService } from '@/services';
 import { DaadLogo } from '@/components/DaadLogo';
+import { texts } from '@/styles/fluent';
 
 interface StatusBarProps {
   connectionState: ConnectionState;
@@ -60,17 +61,17 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   };
 
   return (
-    <header className="flex items-center justify-between px-3.5 py-2.5 bg-[#0e1017] border-b border-white/[0.06] select-none">
+    <header className="flex items-center justify-between px-3.5 py-2.5 bg-[var(--surface-2)] border-b border-[var(--stroke-2)] select-none">
       <div className="flex items-center space-x-2.5 min-w-0">
         <DaadLogo size={24} withGlow={false} />
         <div className="min-w-0">
           <div className="flex items-center space-x-1.5">
             <span data-testid="status-dot" className={`w-1.5 h-1.5 rounded-full ${getStatusDot()}`} />
-            <h1 className="text-[11px] font-medium tracking-wide text-zinc-200 truncate">
+            <h1 className="text-[13px] font-semibold tracking-wide text-[var(--fg-1)] truncate">
               {getStatusText()}
             </h1>
           </div>
-          <p className="text-[10px] text-zinc-500 font-mono truncate">
+          <p className="text-[11px] text-[var(--fg-3)] font-mono truncate">
             {connectionState === 'Registered'
               ? config.sipUri
               : connectionError || 'Configure SIP in Settings'}
@@ -84,14 +85,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             onClick={onOpenUpdates}
             className={`p-1.5 rounded-md transition-all relative ${
               hasUpdate
-                ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.05]'
+                ? 'text-[var(--accent)] bg-[var(--accent-subtle)] hover:bg-[var(--accent-subtle)]'
+                : `${texts['text-fg-3']} hover:text-[var(--fg-1)] hover:bg-[var(--surface-4)]`
             }`}
             title={hasUpdate ? 'Software Update Available!' : 'Check for Updates'}
           >
-            <Sparkles className="w-3.5 h-3.5" />
+            <Sparkles className="w-4 h-4" />
             {hasUpdate && (
-              <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-[var(--accent)] rounded-full" />
             )}
           </button>
         )}
@@ -99,28 +100,28 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         {connectionState === 'RegistrationFailed' && (
           <button
             onClick={onOpenSettings}
-            className="p-1.5 text-rose-400 hover:text-rose-300 transition-colors"
+            className="p-1.5 text-[var(--danger-fg)] hover:opacity-80 transition-colors"
             title={connectionError || 'Registration Error'}
           >
-            <AlertCircle className="w-3.5 h-3.5" />
+            <AlertCircle className="w-4 h-4" />
           </button>
         )}
 
         <button
           onClick={onOpenSettings}
-          className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.05] rounded-md transition-all"
+          className={`p-1.5 ${texts['text-fg-3']} hover:text-[var(--fg-1)] hover:bg-[var(--surface-4)] rounded-md transition-all`}
           title="SIP Settings"
         >
-          <Settings className="w-3.5 h-3.5" />
+          <Settings className="w-4 h-4" />
         </button>
 
         {onLogout && (connectionState === 'Registered' || connectionState === 'Connecting') && (
           <button
             onClick={onLogout}
-            className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-all"
+            className="p-1.5 text-[var(--fg-3)] hover:text-[var(--danger-fg)] hover:bg-[var(--danger-bg)] rounded-md transition-all"
             title="Log Out / Disconnect"
           >
-            <LogOut className="w-3.5 h-3.5" />
+            <LogOut className="w-4 h-4" />
           </button>
         )}
       </div>

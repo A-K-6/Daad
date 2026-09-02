@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Eye, EyeOff, AlertCircle, ChevronDown, ChevronUp, Server, Shield } from 'lucide-react';
 import { SipConfig, ConnectionState } from '@/types';
 import { DaadLogo } from '@/components/DaadLogo';
+import { Button, Input } from '@fluentui/react-components';
 
 interface LoginViewProps {
   initialConfig: SipConfig;
@@ -99,22 +100,22 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const isConnecting = connectionState === 'Connecting';
 
   return (
-    <div className="flex flex-col h-full justify-between p-5 select-none overflow-y-auto bg-[#090a0f]">
+    <div className="flex flex-col h-full justify-between p-5 select-none overflow-y-auto bg-[var(--surface-1)]">
       {/* Brand Header */}
       <div className="flex flex-col items-center justify-center pt-3 pb-2">
         <div className="mb-2">
           <DaadLogo size={46} withGlow={true} />
         </div>
-        <h1 className="text-base font-semibold text-zinc-100 tracking-tight">Daad Softphone</h1>
-        <p className="text-[11px] text-zinc-500 mt-0.5">Sign in with your SIP / PBX account</p>
+        <h1 className="text-lg font-semibold text-[var(--fg-1)] tracking-tight">Daad Softphone</h1>
+        <p className="text-[12px] text-[var(--fg-3)] mt-0.5">Sign in with your SIP / PBX account</p>
       </div>
 
       {/* Login Form */}
       <form onSubmit={handleSubmit} className="space-y-3.5 my-auto py-1">
         {/* Connection Failure Banner */}
         {connectionState === 'RegistrationFailed' && connectionError && (
-          <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px] flex items-start space-x-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+          <div className="p-2.5 rounded-md bg-[var(--danger-bg)] border border-[var(--stroke-2)] text-[var(--danger-fg)] text-[12px] flex items-start space-x-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <div className="min-w-0">
               <span className="font-semibold block">Authentication Failed</span>
               <span className="leading-tight">{connectionError}</span>
@@ -125,7 +126,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         {/* Quick Presets */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-zinc-500 uppercase font-semibold tracking-wider">
+            <span className="text-[11px] text-[var(--fg-3)] uppercase font-semibold tracking-wider">
               Presets & Transports
             </span>
           </div>
@@ -133,28 +134,28 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <button
               type="button"
               onClick={() => handleApplyPreset('tls')}
-              className="py-1 px-1.5 rounded-lg bg-[#13151f] hover:bg-[#1a1c2a] border border-white/[0.06] hover:border-emerald-500/30 text-zinc-300 hover:text-emerald-400 text-[10px] font-medium transition-all text-center"
+              className="py-1 px-1.5 rounded-md bg-[var(--surface-2)] hover:bg-[var(--surface-4)] border border-[var(--stroke-2)] hover:border-[var(--stroke-1)] text-[var(--fg-2)] hover:text-[var(--accent)] text-[11px] font-medium transition-all text-center"
             >
               TLS 5061
             </button>
             <button
               type="button"
               onClick={() => handleApplyPreset('tcp')}
-              className="py-1 px-1.5 rounded-lg bg-[#13151f] hover:bg-[#1a1c2a] border border-white/[0.06] hover:border-emerald-500/30 text-zinc-300 hover:text-emerald-400 text-[10px] font-medium transition-all text-center"
+              className="py-1 px-1.5 rounded-md bg-[var(--surface-2)] hover:bg-[var(--surface-4)] border border-[var(--stroke-2)] hover:border-[var(--stroke-1)] text-[var(--fg-2)] hover:text-[var(--accent)] text-[11px] font-medium transition-all text-center"
             >
               TCP 5060
             </button>
             <button
               type="button"
               onClick={() => handleApplyPreset('asterisk')}
-              className="py-1 px-1.5 rounded-lg bg-[#13151f] hover:bg-[#1a1c2a] border border-white/[0.06] hover:border-emerald-500/30 text-zinc-300 hover:text-emerald-400 text-[10px] font-medium transition-all text-center"
+              className="py-1 px-1.5 rounded-md bg-[var(--surface-2)] hover:bg-[var(--surface-4)] border border-[var(--stroke-2)] hover:border-[var(--stroke-1)] text-[var(--fg-2)] hover:text-[var(--accent)] text-[11px] font-medium transition-all text-center"
             >
               Asterisk
             </button>
             <button
               type="button"
               onClick={() => handleApplyPreset('freeswitch')}
-              className="py-1 px-1.5 rounded-lg bg-[#13151f] hover:bg-[#1a1c2a] border border-white/[0.06] hover:border-emerald-500/30 text-zinc-300 hover:text-emerald-400 text-[10px] font-medium transition-all text-center"
+              className="py-1 px-1.5 rounded-md bg-[var(--surface-2)] hover:bg-[var(--surface-4)] border border-[var(--stroke-2)] hover:border-[var(--stroke-1)] text-[var(--fg-2)] hover:text-[var(--accent)] text-[11px] font-medium transition-all text-center"
             >
               FreeSWITCH
             </button>
@@ -163,56 +164,60 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
         {/* Server Endpoint */}
         <div>
-          <label className="block text-[11px] font-medium text-zinc-400 mb-1 flex items-center justify-between">
+          <label className="block text-[12px] font-medium text-[var(--fg-2)] mb-1 flex items-center justify-between">
             <div className="flex items-center space-x-1">
-              <Server className="w-3 h-3 text-zinc-500" />
+              <Server className="w-3.5 h-3.5 text-[var(--fg-3)]" />
               <span>Server Address / Host</span>
             </div>
-            <span className="text-[9px] text-zinc-500 font-mono">TLS / TCP / UDP / WSS</span>
+            <span className="text-[10px] text-[var(--fg-3)] font-mono">TLS / TCP / UDP / WSS</span>
           </label>
-          <input
+          <Input
             type="text"
             required
             value={formData.serverUrl}
             onChange={(e) => handleChange('serverUrl', e.target.value)}
             placeholder="tls://10.41.113.71:5061 or 10.41.113.71:5061"
-            className="w-full px-2.5 py-1.5 rounded-lg bg-[#13151f] border border-white/[0.08] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/60 font-mono text-xs transition-colors"
+            appearance="outline"
+            contentBefore={<Server className="w-3.5 h-3.5 text-[var(--fg-3)]" />}
+            style={{ fontSize: 12, fontFamily: 'var(--font-base)' }}
           />
         </div>
 
         {/* Username / Extension & Password */}
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="block text-[11px] font-medium text-zinc-400 mb-1">
+            <label className="block text-[12px] font-medium text-[var(--fg-2)] mb-1">
               Extension / User
             </label>
-            <input
+            <Input
               type="text"
               required
               value={formData.username}
               onChange={(e) => handleChange('username', e.target.value)}
               placeholder="1001"
-              className="w-full px-2.5 py-1.5 rounded-lg bg-[#13151f] border border-white/[0.08] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/60 font-mono text-xs transition-colors"
+              appearance="outline"
+              style={{ fontSize: 12 }}
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium text-zinc-400 mb-1">
+            <label className="block text-[12px] font-medium text-[var(--fg-2)] mb-1">
               SIP Password
             </label>
             <div className="relative">
-              <input
+              <Input
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={formData.password}
                 onChange={(e) => handleChange('password', e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-2.5 py-1.5 pr-7 rounded-lg bg-[#13151f] border border-white/[0.08] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/60 text-xs transition-colors"
+                appearance="outline"
+                style={{ fontSize: 12 }}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--fg-3)] hover:text-[var(--fg-1)]"
               >
                 {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
@@ -222,17 +227,19 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
         {/* SIP URI Preview */}
         <div>
-          <label className="block text-[11px] font-medium text-zinc-400 mb-1 flex items-center space-x-1">
-            <Shield className="w-3 h-3 text-zinc-500" />
+          <label className="block text-[12px] font-medium text-[var(--fg-2)] mb-1 flex items-center space-x-1">
+            <Shield className="w-3.5 h-3.5 text-[var(--fg-3)]" />
             <span>SIP Address (AOR)</span>
           </label>
-          <input
+          <Input
             type="text"
             required
             value={formData.sipUri}
             onChange={(e) => handleChange('sipUri', e.target.value)}
             placeholder="sip:1001@pbx.example.com"
-            className="w-full px-2.5 py-1.5 rounded-lg bg-[#13151f] border border-white/[0.08] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/60 font-mono text-xs transition-colors"
+            appearance="outline"
+            contentBefore={<Shield className="w-3.5 h-3.5 text-[var(--fg-3)]" />}
+            style={{ fontSize: 12, fontFamily: 'var(--font-base)' }}
           />
         </div>
 
@@ -241,37 +248,39 @@ export const LoginView: React.FC<LoginViewProps> = ({
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center space-x-1 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="flex items-center space-x-1 text-[12px] text-[var(--fg-3)] hover:text-[var(--fg-1)] transition-colors"
           >
             {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             <span>Advanced Configuration (STUN, Display Name)</span>
           </button>
 
           {showAdvanced && (
-            <div className="mt-2 space-y-2 p-2.5 rounded-lg bg-[#13151f] border border-white/[0.06] animate-in fade-in duration-100">
+            <div className="mt-2 space-y-2 p-2.5 rounded-md bg-[var(--surface-2)] border border-[var(--stroke-2)]">
               <div>
-                <label className="block text-[10px] font-medium text-zinc-400 mb-1">
+                <label className="block text-[11px] font-medium text-[var(--fg-2)] mb-1">
                   Caller Display Name
                 </label>
-                <input
+                <Input
                   type="text"
                   value={formData.displayName || ''}
                   onChange={(e) => handleChange('displayName', e.target.value)}
                   placeholder="e.g. Aeen Desk"
-                  className="w-full px-2 py-1 rounded-md bg-[#090a0f] border border-white/[0.08] text-zinc-100 text-xs focus:outline-none focus:border-emerald-500"
+                  appearance="outline"
+                  style={{ fontSize: 12 }}
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-medium text-zinc-400 mb-1">
+                <label className="block text-[11px] font-medium text-[var(--fg-2)] mb-1">
                   STUN Server (WebRTC ICE)
                 </label>
-                <input
+                <Input
                   type="text"
                   value={formData.stunServer || ''}
                   onChange={(e) => handleChange('stunServer', e.target.value)}
                   placeholder="stun:stun.l.google.com:19302"
-                  className="w-full px-2 py-1 rounded-md bg-[#090a0f] border border-white/[0.08] text-zinc-100 font-mono text-xs focus:outline-none focus:border-emerald-500"
+                  appearance="outline"
+                  style={{ fontSize: 12, fontFamily: 'var(--font-base)' }}
                 />
               </div>
             </div>
@@ -280,26 +289,27 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
         {/* Submit Action */}
         <div className="pt-2">
-          <button
+          <Button
             type="submit"
+            appearance="primary"
             disabled={isConnecting}
-            className="w-full py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-zinc-950 font-semibold text-xs shadow-md shadow-emerald-500/20 transition-all active:scale-[0.98] flex items-center justify-center space-x-2"
+            style={{ fontWeight: 600, fontSize: 13, width: '100%' }}
           >
             {isConnecting ? (
               <>
-                <div className="w-3.5 h-3.5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
+                <div className="w-3.5 h-3.5 border-2 border-[var(--on-accent)] border-t-transparent rounded-full animate-spin" />
                 <span>Connecting & Registering...</span>
               </>
             ) : (
               <span>Sign In & Connect</span>
             )}
-          </button>
+          </Button>
         </div>
       </form>
 
       {/* Footer info */}
       <div className="pt-2 text-center">
-        <p className="text-[10px] text-zinc-600 font-mono">
+        <p className="text-[10px] text-[var(--fg-disabled)] font-mono">
           Powered by Tauri v2 & SIP.js • Open Source
         </p>
       </div>
