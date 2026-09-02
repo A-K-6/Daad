@@ -19,6 +19,46 @@ type ConnectionStateListener = (state: ConnectionState, error?: string) => void;
 type CallStateListener = (state: CallState, info: CallInfo | null) => void;
 type IncomingCallListener = (invitation: Invitation, caller: string) => void;
 
+/**
+ * Build the SIP.js UserAgent options for a given configuration.
+ *
+ * The Contact binding is pinned to the WebSocket transport so the PBX routes
+ * inbound calls back over the same WSS/WS connection. SIP.js derives the
+ * Contact's `transport` parameter from `contactParams`, so we force `ws` here —
+ * otherwise a `tls://`/`tcp://` server URL can leak `transport=tls` into the
+ * REGISTER/INVITE Contact, which breaks Server-side originate.
+ *
+ * @internal extracted as a pure function so it can be tested without instantiating a UserAgent.
+ */
+export function buildUserAgentOptions(
+  uri: NonNullable<ReturnType<typeof UserAgent.makeURI>>,
+  transportServer: string,
+  config: SipConfig,
+  delegate: UserAgentOptions['delegate']
+): UserAgentOptions {
+  return {
+    uri,
+    transportOptions: {
+      server: transportServer,
+      traceSip: true,
+      keepAliveInterval: 25,
+    },
+    authorizationUsername: config.username.trim(),
+    authorizationPassword: config.password,
+    displayName: config.displayName?.trim() || config.username.trim(),
+    contactParams: { transport: 'ws' },
+    sessionDescriptionHandlerFactory: Web.defaultSessionDescriptionHandlerFactory(),
+    sessionDescriptionHandlerFactoryOptions: {
+      peerConnectionConfiguration: {
+        iceServers: config.stunServer?.trim()
+          ? [{ urls: config.stunServer.trim() }]
+          : [{ urls: 'stun:stun.l.google.com:19302' }],
+      },
+    },
+    delegate,
+  };
+}
+
 class SipService {
   private userAgent: UserAgent | null = null;
   private registerer: Registerer | null = null;
@@ -155,38 +195,19 @@ class SipService {
 
       const transportServer = await this.resolveServerTransport(config.serverUrl.trim());
 
-      const userAgentOptions: UserAgentOptions = {
-        uri,
-        transportOptions: {
-          server: transportServer,
-          traceSip: true,
-          keepAliveInterval: 25,
+      const userAgentOptions = buildUserAgentOptions(uri, transportServer, config, {
+        onInvite: (invitation: Invitation) => {
+          this.handleIncomingInvitation(invitation);
         },
-        authorizationUsername: config.username.trim(),
-        authorizationPassword: config.password,
-        displayName: config.displayName?.trim() || config.username.trim(),
-        sessionDescriptionHandlerFactory: Web.defaultSessionDescriptionHandlerFactory(),
-        sessionDescriptionHandlerFactoryOptions: {
-          peerConnectionConfiguration: {
-            iceServers: config.stunServer?.trim()
-              ? [{ urls: config.stunServer.trim() }]
-              : [{ urls: 'stun:stun.l.google.com:19302' }],
-          },
+        onDisconnect: (error) => {
+          if (error) {
+            console.warn('SIP Transport Disconnected:', error);
+            this.setConnectionState('RegistrationFailed', error.message);
+          } else {
+            this.setConnectionState('Disconnected');
+          }
         },
-        delegate: {
-          onInvite: (invitation: Invitation) => {
-            this.handleIncomingInvitation(invitation);
-          },
-          onDisconnect: (error) => {
-            if (error) {
-              console.warn('SIP Transport Disconnected:', error);
-              this.setConnectionState('RegistrationFailed', error.message);
-            } else {
-              this.setConnectionState('Disconnected');
-            }
-          },
-        },
-      };
+      });
 
       this.userAgent = new UserAgent(userAgentOptions);
       await this.userAgent.start();

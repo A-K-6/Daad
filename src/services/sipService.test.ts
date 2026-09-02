@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { sipService } from './sipService';
+import { sipService, buildUserAgentOptions } from './sipService';
 import { SipConfig } from '@/types';
 
 describe('SipService', () => {
@@ -77,5 +77,39 @@ describe('SipService', () => {
     await expect(sipService.disconnect()).resolves.not.toThrow();
     expect(sipService.getConnectionState()).toBe('Disconnected');
     expect(sipService.getCallState()).toBe('Idle');
+  });
+});
+
+describe('buildUserAgentOptions', () => {
+  const sampleConfig: SipConfig = {
+    serverUrl: 'wss://pbx.example.com:8089/ws',
+    sipUri: 'sip:1001@pbx.example.com',
+    username: '1001',
+    password: 'secretPassword',
+    displayName: 'User 1001',
+    stunServer: 'stun:stun.l.google.com:19302',
+    registerExpires: 600,
+  };
+
+  const uri = { toString: () => sampleConfig.sipUri } as never;
+
+  it('pins the REGISTER/INVITE Contact to transport=ws', () => {
+    const opts = buildUserAgentOptions(uri, 'ws://127.0.0.1:8100', sampleConfig, {});
+    expect(opts.contactParams).toEqual({ transport: 'ws' });
+    expect(opts.contactName).toBeUndefined();
+  });
+
+  it('never derives transport from a tls:// or tcp:// server URL', () => {
+    const tlsOpts = buildUserAgentOptions(uri, 'ws://127.0.0.1:8100', { ...sampleConfig, serverUrl: 'tls://pbx:5061' }, {});
+    const tcpOpts = buildUserAgentOptions(uri, 'ws://127.0.0.1:8100', { ...sampleConfig, serverUrl: 'tcp://pbx:5060' }, {});
+    expect(tlsOpts.contactParams).toEqual({ transport: 'ws' });
+    expect(tcpOpts.contactParams).toEqual({ transport: 'ws' });
+  });
+
+  it('configures the transport server and keepalive', () => {
+    const opts = buildUserAgentOptions(uri, 'wss://pbx:8089/ws', sampleConfig, {});
+    const transport = opts.transportOptions as { server: string; keepAliveInterval: number };
+    expect(transport.server).toBe('wss://pbx:8089/ws');
+    expect(transport.keepAliveInterval).toBe(25);
   });
 });
