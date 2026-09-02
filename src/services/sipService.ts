@@ -155,24 +155,16 @@ class SipService {
 
       const transportServer = await this.resolveServerTransport(config.serverUrl.trim());
 
-      const isTls = config.serverUrl.toLowerCase().includes('5061') || config.serverUrl.toLowerCase().includes('tls');
-      const isTcp = config.serverUrl.toLowerCase().includes('5060') || config.serverUrl.toLowerCase().includes('tcp');
-      const transportType = isTls ? 'tls' : isTcp ? 'tcp' : 'ws';
-
       const userAgentOptions: UserAgentOptions = {
         uri,
         transportOptions: {
           server: transportServer,
           traceSip: true,
+          keepAliveInterval: 25,
         },
         authorizationUsername: config.username.trim(),
         authorizationPassword: config.password,
         displayName: config.displayName?.trim() || config.username.trim(),
-        contactName: config.username.trim(),
-        contactParams: {
-          transport: transportType,
-        },
-        hackViaTcp: isTcp || isTls,
         sessionDescriptionHandlerFactory: Web.defaultSessionDescriptionHandlerFactory(),
         sessionDescriptionHandlerFactoryOptions: {
           peerConnectionConfiguration: {
@@ -201,6 +193,7 @@ class SipService {
 
       this.registerer = new Registerer(this.userAgent, {
         expires: config.registerExpires || 600,
+        refreshFrequency: 90,
       });
 
       this.registerer.stateChange.addListener((state: RegistererState) => {
