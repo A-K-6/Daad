@@ -116,7 +116,7 @@ describe('SipContext (native)', () => {
     expect(stored).not.toContain('fresh-secret');
     expect(stored).not.toContain('BEGIN CERTIFICATE');
     const upsert = calls.find((c) => c.cmd === 'sip_account_upsert');
-    expect(upsert?.args?.custom_ca_pem).toBe(pem);
+    expect(upsert?.args?.customCaPem).toBe(pem);
   });
 
   it('trusts Rust event timestamps for call timing (no webview-owned start)', async () => {

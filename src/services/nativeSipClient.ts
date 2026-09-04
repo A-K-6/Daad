@@ -269,14 +269,17 @@ export class NativeSipClient {
       if (!v.ok) throw new Error(v.error || 'Invalid custom CA PEM');
     }
     await this.call('sip_account_upsert', {
-      server_url: args.serverUrl.trim(),
-      sip_uri: args.sipUri.trim(),
+      // Tauri converts Rust params to lowerCamelCase IPC keys by default
+      // (tauri-macros `to_lower_camel_case`): snake_case keys are rejected
+      // with `invalid args 'serverUrl' ...`. Keep these camelCase.
+      serverUrl: args.serverUrl.trim(),
+      sipUri: args.sipUri.trim(),
       username: args.username.trim(),
       password: args.password,
-      display_name: args.displayName?.trim() || undefined,
-      register_expires: args.registerExpires ?? 600,
+      displayName: args.displayName?.trim() || undefined,
+      registerExpires: args.registerExpires ?? 600,
       ...(args.extension?.trim() ? { extension: args.extension.trim() } : {}),
-      ...(caPem ? { custom_ca_pem: caPem } : {}),
+      ...(caPem ? { customCaPem: caPem } : {}),
     });
   }
 

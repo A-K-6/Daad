@@ -210,7 +210,7 @@ describe('NativeSipClient IPC', () => {
       password: 'pw',
       customCaPem: pem,
     });
-    expect(upsertArgs?.custom_ca_pem).toBe(pem);
+    expect(upsertArgs?.customCaPem).toBe(pem);
     await expect(
       client.accountUpsert({
         serverUrl: 'tls://pbx:5061',
@@ -222,7 +222,7 @@ describe('NativeSipClient IPC', () => {
     ).rejects.toThrow(/PEM/);
   });
 
-  it('uses snake_case IPC keys matching the Rust sip_account_upsert signature', async () => {    let upsertArgs: Record<string, unknown> | undefined;
+  it('uses camelCase IPC keys matching Tauri arg conversion', async () => {    let upsertArgs: Record<string, unknown> | undefined;
     const client = new NativeSipClient({
       invokeFn: async (cmd, args) => {
         if (cmd === 'sip_account_upsert') upsertArgs = args;
@@ -236,16 +236,16 @@ describe('NativeSipClient IPC', () => {
       username: '2001',
       password: 'pw',
     });
-    // Must match `sip_account_upsert(server_url, sip_uri, username, ...)`
-    // in src-tauri/src/lib.rs exactly — Tauri arg names are case-sensitive.
-    // camelCase `serverUrl` or a nested `account` object breaks the invoke.
+    // Tauri converts Rust params (server_url, sip_uri, ...) to lowerCamelCase
+    // IPC keys. snake_case keys are rejected with
+    // `invalid args 'serverUrl' for command 'sip_account_upsert'`.
     expect(upsertArgs).toMatchObject({
-      server_url: 'tls://10.41.113.71:5061',
-      sip_uri: 'sip:2001@10.41.113.71',
+      serverUrl: 'tls://10.41.113.71:5061',
+      sipUri: 'sip:2001@10.41.113.71',
       username: '2001',
       password: 'pw',
     });
-    expect(upsertArgs).not.toHaveProperty('serverUrl');
+    expect(upsertArgs).not.toHaveProperty('server_url');
     expect(upsertArgs).not.toHaveProperty('account');
   });
 
