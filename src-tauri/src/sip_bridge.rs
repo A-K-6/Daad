@@ -294,7 +294,7 @@ impl SipBridgeManager {
                 match sock_recv.recv(&mut buf).await {
                     Ok(n) if n > 0 => {
                         let text = String::from_utf8_lossy(&buf[..n]).to_string();
-                        let ws_text = text.replace("SIP/2.0/UDP", "SIP/2.0/WS");
+                        let ws_text = translate_remote_to_ws(&text, "UDP");
                         if ws_sink.send(Message::Text(ws_text.into())).await.is_err() {
                             break;
                         }
@@ -310,10 +310,7 @@ impl SipBridgeManager {
             while let Some(Ok(msg)) = ws_stream_reader.next().await {
                 match msg {
                     Message::Text(text) => {
-                        let sip_raw = text
-                            .replace("SIP/2.0/WSS", "SIP/2.0/UDP")
-                            .replace("SIP/2.0/WS", "SIP/2.0/UDP")
-                            .replace(";transport=ws", ";transport=udp");
+                        let sip_raw = translate_ws_to_remote(&text, "UDP");
                         let _ = sock_send.send(sip_raw.as_bytes()).await;
                     }
                     Message::Binary(bin) => {
@@ -351,8 +348,7 @@ impl SipBridgeManager {
                     Ok(n) if n > 0 => {
                         let text = String::from_utf8_lossy(&buf[..n]).to_string();
                         // Translate PBX native transport back to WS for SIP.js Via check
-                        let ws_text = text
-                            .replace(&format!("SIP/2.0/{}", tag), "SIP/2.0/WS");
+                        let ws_text = translate_remote_to_ws(&text, tag);
                         if ws_sink.send(Message::Text(ws_text.into())).await.is_err() {
                             break;
                         }
@@ -368,11 +364,7 @@ impl SipBridgeManager {
                 match msg {
                     Message::Text(text) => {
                         // Translate WS headers to PBX native socket transport (TLS/TCP)
-                        let target_trans = tag.to_lowercase();
-                        let sip_raw = text
-                            .replace("SIP/2.0/WSS", &format!("SIP/2.0/{}", tag))
-                            .replace("SIP/2.0/WS", &format!("SIP/2.0/{}", tag))
-                            .replace(";transport=ws", &format!(";transport={}", target_trans));
+                        let sip_raw = translate_ws_to_remote(&text, tag);
                         
                         if remote_write.write_all(sip_raw.as_bytes()).await.is_err() {
                             break;
@@ -393,5 +385,67 @@ impl SipBridgeManager {
             _ = &mut remote_to_ws => {}
             _ = &mut ws_to_remote => {}
         }
+    }
+}
+
+/// Translates outgoing SIP messages from local WebSocket to PBX native transport.
+///
+/// Replaces `SIP/2.0/WSS` and `SIP/2.0/WS` in `Via` headers with the native PBX socket transport
+/// (e.g. `SIP/2.0/TLS`, `SIP/2.0/TCP`, `SIP/2.0/UDP`).
+///
+/// Crucially, this does NOT rewrite the Contact header parameter (`transport=ws`).
+/// SIP.js and WebRTC require the Contact binding to remain pinned to `transport=ws`
+/// so that PBX server-side origination and inbound calls route back over the WebSocket session.
+pub fn translate_ws_to_remote(text: &str, transport_tag: &str) -> String {
+    text.replace("SIP/2.0/WSS", &format!("SIP/2.0/{}", transport_tag))
+        .replace("SIP/2.0/WS", &format!("SIP/2.0/{}", transport_tag))
+}
+
+/// Translates incoming SIP messages from PBX native transport to WebSocket format for SIP.js.
+///
+/// Replaces `SIP/2.0/<TAG>` in `Via` headers back to `SIP/2.0/WS` so SIP.js passes its Via sanity check.
+pub fn translate_remote_to_ws(text: &str, transport_tag: &str) -> String {
+    text.replace(&format!("SIP/2.0/{}", transport_tag), "SIP/2.0/WS")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_translate_ws_to_remote_preserves_contact_transport_ws() {
+        let sip_msg = "REGISTER sip:10.41.113.71 SIP/2.0\r\n\
+Via: SIP/2.0/WS 127.0.0.1:8100;branch=z9hG4bK12345\r\n\
+From: <sip:guest-2001@10.41.113.71>;tag=tag123\r\n\
+To: <sip:guest-2001@10.41.113.71>\r\n\
+Call-ID: call-id-123\r\n\
+CSeq: 1 REGISTER\r\n\
+Contact: <sip:guest-2001@abcdef123456.invalid;transport=ws>;expires=600\r\n\r\n";
+
+        let translated = translate_ws_to_remote(sip_msg, "TLS");
+        assert!(translated.contains("Via: SIP/2.0/TLS 127.0.0.1:8100;branch=z9hG4bK12345"));
+        assert!(translated.contains("Contact: <sip:guest-2001@abcdef123456.invalid;transport=ws>;expires=600"));
+        assert!(!translated.contains(";transport=tls"));
+    }
+
+    #[test]
+    fn test_translate_ws_to_remote_udp() {
+        let sip_msg = "REGISTER sip:10.41.113.71 SIP/2.0\r\n\
+Via: SIP/2.0/WS 127.0.0.1:8100;branch=z9hG4bK12345\r\n\
+Contact: <sip:guest-2001@abcdef123456.invalid;transport=ws>\r\n\r\n";
+
+        let translated = translate_ws_to_remote(sip_msg, "UDP");
+        assert!(translated.contains("Via: SIP/2.0/UDP 127.0.0.1:8100;branch=z9hG4bK12345"));
+        assert!(translated.contains("Contact: <sip:guest-2001@abcdef123456.invalid;transport=ws>"));
+        assert!(!translated.contains(";transport=udp"));
+    }
+
+    #[test]
+    fn test_translate_remote_to_ws() {
+        let pbx_msg = "SIP/2.0 200 OK\r\n\
+Via: SIP/2.0/TLS 127.0.0.1:8100;branch=z9hG4bK12345\r\n\r\n";
+
+        let ws_msg = translate_remote_to_ws(pbx_msg, "TLS");
+        assert!(ws_msg.contains("Via: SIP/2.0/WS 127.0.0.1:8100;branch=z9hG4bK12345"));
     }
 }
