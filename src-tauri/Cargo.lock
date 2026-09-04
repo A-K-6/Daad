@@ -693,7 +693,7 @@ dependencies = [
 
 [[package]]
 name = "daad"
-version = "0.5.0-3"
+version = "0.5.0-5"
 dependencies = [
  "audiopus",
  "base64 0.22.1",

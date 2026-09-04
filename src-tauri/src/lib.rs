@@ -1700,6 +1700,28 @@ async fn outbound_call_task(
     }
 }
 
+/// Map a sanitised TLS failure to actionable, secret-free user guidance.
+/// Input must already be redacted (`sanitize_log`): variant keywords carry
+/// no identities, IPs, or key material.
+fn classify_tls_error(sanitised: &str) -> String {
+    let l = sanitised.to_lowercase();
+    if l.contains("unknownissuer") || l.contains("unknown issuer") {
+        "TLS verification failed: Core certificate is not signed by a trusted CA — paste the Core CA certificate in Provisioning and try again".to_string()
+    } else if l.contains("expir") {
+        "TLS verification failed: Core certificate is expired — renew it on the Core".to_string()
+    } else if l.contains("notvalidyet") || l.contains("not valid yet") {
+        "TLS verification failed: Core certificate is not yet valid — check the device and Core clocks".to_string()
+    } else if l.contains("notvalidforname") || l.contains("not valid for name") {
+        "TLS verification failed: Core certificate does not cover this host — use the provisioned hostname or fix its SANs on the Core".to_string()
+    } else if l.contains("server name rejected") {
+        "TLS setup failed: cannot build a server name from the Server field — check host/IP and port".to_string()
+    } else if l.contains("tls config rejected") || l.contains("zero usable certs") {
+        "TLS setup failed: custom CA bundle is unusable — re-paste a valid PEM bundle".to_string()
+    } else {
+        "TLS certificate verification failed; connection closed (fail-closed)".to_string()
+    }
+}
+
 async fn registration_worker(
     core: Arc<CoreState>,
     profile: SipProfile,
@@ -1724,10 +1746,7 @@ async fn registration_worker(
                     || msg.contains("handshake")
                 {
                     log::error!("core: {msg}");
-                    core.set_status_message(
-                        &account_id,
-                        "TLS certificate verification failed; connection closed (fail-closed)",
-                    );
+                    core.set_status_message(&account_id, classify_tls_error(&msg));
                     core.apply(&account_id, AccountEvent::CertError);
                     return; // fail-closed: no silent retry on cert errors
                 }
@@ -2258,6 +2277,32 @@ pub fn run() {
 #[cfg(test)]
 mod native_facade_tests {
     use super::*;
+
+    #[test]
+    fn tls_errors_classify_to_actionable_guidance() {
+        // Inputs mirror sanitize_log output: variant keywords, redacted IDs.
+        let unknown = classify_tls_error("handshake failed: invalid peer certificate: UnknownIssuer");
+        assert!(unknown.contains("not signed by a trusted CA"), "{unknown}");
+        assert!(unknown.contains("paste the Core CA"), "{unknown}");
+
+        let expired = classify_tls_error("handshake failed: invalid peer certificate: Expired");
+        assert!(expired.contains("expired"), "{expired}");
+
+        let san = classify_tls_error("handshake failed: invalid peer certificate: NotValidForName");
+        assert!(san.contains("does not cover this host"), "{san}");
+
+        let sni = classify_tls_error("server name rejected: empty host");
+        assert!(sni.contains("Server field"), "{sni}");
+
+        let fallback = classify_tls_error("handshake failed: unexpected message");
+        assert!(fallback.contains("fail-closed"), "{fallback}");
+
+        // Guidance must never echo identities or network details.
+        for m in [&unknown, &expired, &san, &sni, &fallback] {
+            assert!(!m.contains("10.41.113.71"), "{m}");
+            assert!(!m.contains("guest-2001"), "{m}");
+        }
+    }
 
     #[test]
     fn server_url_shapes() {
