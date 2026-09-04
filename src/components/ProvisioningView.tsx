@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, AlertCircle, Server, Shield, FileUp } from 'lucide-react';
 import type { ConnectionState, SipConfig } from '@/types';
 import { CertTrustBadge } from '@/components/CertTrustBadge';
+import { ThemeToggleButton } from '@/components/ThemeToggleButton';
 import { validateCaPem, validateExtension, validateDeviceUsername, usernameFromSipUri } from '@/services/nativeSipClient';
 import type { CertTrustStatus } from '@/types';
 
@@ -174,7 +175,10 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
   const certPending = certStatus === 'unknown' && CERT_PENDING_STATES.includes(connectionState);
 
   return (
-    <div className="flex flex-col h-full p-5 overflow-y-auto bg-[#090a0f] text-zinc-200 select-none">
+    <div className="flex flex-col h-full p-5 overflow-y-auto bg-[#090a0f] text-zinc-200 select-none relative">
+      <div className="absolute top-3 right-3">
+        <ThemeToggleButton />
+      </div>
       <div className="flex flex-col items-center pt-3 pb-2">
         <h1 className="text-lg font-semibold tracking-tight">Provision SIP account</h1>
         <p className="text-[12px] text-zinc-500 mt-0.5 font-mono">

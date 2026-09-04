@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SipProvider, useSip, useTheme } from '@/context';
+import { SipProvider, useSip } from '@/context';
 import {
   StatusBar,
   DialerPad,
@@ -14,23 +14,7 @@ import {
 } from '@/components';
 import { SipConfig } from '@/types';
 import { updateService } from '@/services';
-import { Phone, Clock, Sun, Moon } from 'lucide-react';
-
-import { Button } from '@fluentui/react-components';
-
-const ThemeToggle: React.FC = () => {
-  const { isDark, toggleTheme } = useTheme();
-  return (
-    <Button
-      appearance="subtle"
-      size="large"
-      aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-      title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-      onClick={toggleTheme}
-      icon={{ children: isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" /> }}
-    />
-  );
-};
+import { Phone, Clock } from 'lucide-react';
 
 const MainSoftphone: React.FC = () => {
   const {
@@ -267,12 +251,11 @@ const MainSoftphone: React.FC = () => {
   );
 
   // If inside native Tauri window, render only the softphone
+  // (theme control lives inside the widget chrome — StatusBar and
+  // ProvisioningView — so nothing floats over real controls).
   if (isTauri) {
     return (
       <div className="flex justify-center items-center h-screen w-screen bg-[#090a0f] overflow-hidden">
-        <div className="absolute top-4 right-4 z-10">
-          <ThemeToggle />
-        </div>
         {softphoneWidget}
       </div>
     );
@@ -281,9 +264,6 @@ const MainSoftphone: React.FC = () => {
   // If on web, render landing showcase page
   return (
     <div className="min-h-screen w-full bg-[#0c0e15] flex items-center justify-center p-4 lg:p-12 overflow-x-hidden">
-      <div className="absolute top-4 right-4 z-10">
-        <ThemeToggle />
-      </div>
       <div className="w-full max-w-6xl flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-16">
         <LandingHero />
         <div className="shrink-0 flex items-center justify-center">

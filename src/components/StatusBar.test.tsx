@@ -28,6 +28,25 @@ describe('StatusBar Component', () => {
     expect(dot.className).toContain('bg-emerald-500');
   });
 
+  it('keeps theme toggle inside the header next to settings (never floating over it)', () => {
+    const onOpenSettings = vi.fn();
+    render(
+      <StatusBar
+        connectionState="Registered"
+        connectionError={null}
+        config={mockConfig}
+        onOpenSettings={onOpenSettings}
+      />
+    );
+    const toggle = screen.getByTestId('theme-toggle');
+    const settings = screen.getByTitle('SIP Settings');
+    expect(toggle).toBeInTheDocument();
+    expect(settings).toBeInTheDocument();
+    // Both live in the same header row — no overlay can cover either.
+    expect(toggle.closest('header')).toBe(settings.closest('header'));
+    expect(document.querySelector('.absolute.top-4.right-4.z-10')).toBeNull();
+  });
+
   it('renders Connecting state with amber pulsing indicator', () => {
     render(
       <StatusBar

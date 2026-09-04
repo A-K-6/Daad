@@ -141,6 +141,18 @@ describe('ProvisioningView', () => {
     // jsdom has no Tauri runtime — footer falls back to 'dev'.
     expect(screen.getByTestId('app-version').textContent).toMatch(/build /);
   });
+  it('keeps the theme toggle inside the provisioning card', () => {
+    render(
+      <ProvisioningView
+        initialConfig={base}
+        connectionState="Disconnected"
+        connectionError={null}
+        certStatus="unknown"
+        onProvision={vi.fn(async () => undefined)}
+      />,
+    );
+    expect(screen.getByTestId('theme-toggle')).toBeInTheDocument();
+  });
   it('rejects malformed CA PEM before IPC', () => {
     const onProvision = vi.fn(async () => undefined);
     render(

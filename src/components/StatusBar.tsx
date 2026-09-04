@@ -4,6 +4,7 @@ import { ConnectionState, SipConfig, CertTrustStatus } from '@/types';
 import { updateService } from '@/services';
 import { DaadLogo } from '@/components/DaadLogo';
 import { CertTrustBadge } from '@/components/CertTrustBadge';
+import { ThemeToggleButton } from '@/components/ThemeToggleButton';
 import { texts } from '@/styles/fluent';
 
 interface StatusBarProps {
@@ -118,6 +119,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       </div>
 
       <div className="flex items-center space-x-1">
+        <ThemeToggleButton />
         {onOpenUpdates && (
           <button
             onClick={onOpenUpdates}

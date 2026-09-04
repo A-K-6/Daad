@@ -12,3 +12,4 @@ export { UpdateModal } from './UpdateModal';
 export { LandingHero } from './LandingHero';
 export { DtmfKeypadModal } from './DtmfKeypadModal';
 export { DaadLogo } from './DaadLogo';
+export { ThemeToggleButton } from './ThemeToggleButton';
