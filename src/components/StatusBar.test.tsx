@@ -75,4 +75,29 @@ describe('StatusBar Component', () => {
     fireEvent.click(logoutBtn);
     expect(handleLogout).toHaveBeenCalledTimes(1);
   });
+
+  it('renders each native transport/TLS/registration state distinctly with Rust message', () => {
+    const cases: Array<[string, string]> = [
+      ['NetworkConnected', 'Network connected'],
+      ['TlsVerified', 'TLS verified'],
+      ['Registering', 'Registering...'],
+      ['AuthFailed', 'Auth failed'],
+      ['CertFailed', 'Cert failed'],
+      ['MicFailed', 'Mic failed'],
+      ['NoReachableContact', 'No reachable contact'],
+    ];
+    for (const [state, text] of cases) {
+      const { unmount } = render(
+        <StatusBar
+          connectionState={state as never}
+          connectionError={`rust says: ${state}`}
+          config={mockConfig}
+          onOpenSettings={vi.fn()}
+        />,
+      );
+      expect(screen.getByText(text)).toBeInTheDocument();
+      expect(screen.getByTestId('status-message')).toHaveTextContent(`rust says: ${state}`);
+      unmount();
+    }
+  });
 });

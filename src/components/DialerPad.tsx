@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Phone, Delete, Copy, ClipboardPaste, Check, RotateCcw } from 'lucide-react';
 import { soundService, callHistoryService } from '@/services';
+import { validateDialTarget } from '@/services/nativeSipClient';
 import { ConnectionState } from '@/types';
 
 interface DialerPadProps {
@@ -37,6 +38,7 @@ export const DialerPad: React.FC<DialerPadProps> = ({
   const [inputNumber, setInputNumber] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [dialError, setDialError] = useState<string | null>(null);
 
   const zeroTimerRef = useRef<NodeJS.Timeout | null>(null);
   const zeroLongPressedRef = useRef<boolean>(false);
@@ -51,6 +53,7 @@ export const DialerPad: React.FC<DialerPadProps> = ({
   const handleKeyPress = useCallback((digit: string) => {
     soundService.playDtmf(digit);
     flashKey(digit);
+    setDialError(null);
     setInputNumber((prev) => prev + digit);
   }, [flashKey]);
 
@@ -98,15 +101,22 @@ export const DialerPad: React.FC<DialerPadProps> = ({
   }, []);
 
   const handleDial = useCallback(() => {
-    if (!inputNumber.trim()) {
+    const target = inputNumber.trim();
+    if (!target) {
       handleRedial();
       return;
     }
+    const v = validateDialTarget(target);
+    if (!v.ok) {
+      setDialError(v.error);
+      return;
+    }
+    setDialError(null);
     if (connectionState !== 'Registered') {
       onOpenSettings();
       return;
     }
-    onCall(inputNumber.trim());
+    onCall(target);
   }, [inputNumber, connectionState, onCall, onOpenSettings, handleRedial]);
 
   // Physical keyboard listener
@@ -238,6 +248,16 @@ export const DialerPad: React.FC<DialerPadProps> = ({
             </div>
           )}
         </div>
+        {dialError && (
+          <p role="alert" className="text-[11px] text-rose-400 font-mono text-center mt-1">
+            {dialError} Use 3–8 digits, no leading zero.
+          </p>
+        )}
+        {!dialError && inputNumber && (
+          <p className="text-[10px] text-zinc-500 font-mono text-center mt-1">
+            Extension format: 3–8 digits, no leading zero
+          </p>
+        )}
       </div>
 
       {/* 3x4 Dialpad Grid */}

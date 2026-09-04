@@ -5,9 +5,8 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::sync::{broadcast, Mutex};
-use tokio_rustls::rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use tokio_rustls::rustls::pki_types::{CertificateDer, ServerName, UnixTime};
-use tokio_rustls::rustls::{ClientConfig, DigitallySignedStruct, Error as RustlsError, RootCertStore, SignatureScheme};
+use tokio_rustls::rustls::pki_types::ServerName;
+use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 use tokio_rustls::TlsConnector;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;
@@ -19,48 +18,12 @@ pub struct BridgeInfo {
     pub remote_target: String,
 }
 
-#[derive(Clone, Debug)]
-struct NoCertVerifier;
-
-impl ServerCertVerifier for NoCertVerifier {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: UnixTime,
-    ) -> Result<ServerCertVerified, RustlsError> {
-        Ok(ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, RustlsError> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, RustlsError> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        vec![
-            SignatureScheme::RSA_PKCS1_SHA256,
-            SignatureScheme::ECDSA_NISTP256_SHA256,
-            SignatureScheme::RSA_PSS_SHA256,
-            SignatureScheme::ED25519,
-        ]
-    }
-}
+// NOTE: this legacy sip.js bridge is fail-closed. There is deliberately NO
+// accept-all certificate verifier and NO insecure-skip flag anywhere in this
+// file: TLS always verifies against system roots. A `no_accept_all_verifier`
+// unit test below plus a CI lint gate enforce this. The native `sip_*` path
+// never touches this bridge (it owns verified TLS directly in `sip_core`);
+// this bridge exists only for the legacy WebSocket-compat path.
 
 pub struct SipBridgeManager {
     shutdown_tx: Arc<Mutex<Option<broadcast::Sender<()>>>>,
@@ -85,7 +48,6 @@ impl SipBridgeManager {
         remote_host: String,
         remote_port: u16,
         transport: String,
-        allow_insecure: bool,
     ) -> Result<BridgeInfo, String> {
         self.stop().await;
 
@@ -116,7 +78,7 @@ impl SipBridgeManager {
                 _ = shutdown_rx.recv() => {
                     log::info!("SIP bridge shutting down listener");
                 }
-                res = Self::run_listener(listener, host_clone, remote_port, trans_clone, allow_insecure, shutdown_tx) => {
+                res = Self::run_listener(listener, host_clone, remote_port, trans_clone, shutdown_tx) => {
                     if let Err(e) = res {
                         log::error!("SIP bridge listener error: {}", e);
                     }
@@ -136,7 +98,6 @@ impl SipBridgeManager {
         remote_host: String,
         remote_port: u16,
         transport: String,
-        allow_insecure: bool,
         shutdown_tx: broadcast::Sender<()>,
     ) -> Result<(), String> {
         while let Ok((stream, _)) = listener.accept().await {
@@ -147,7 +108,7 @@ impl SipBridgeManager {
             tokio::spawn(async move {
                 tokio::select! {
                     _ = shutdown_rx.recv() => {}
-                    _ = Self::handle_ws_client(stream, host, remote_port, trans, allow_insecure) => {}
+                    _ = Self::handle_ws_client(stream, host, remote_port, trans) => {}
                 }
             });
         }
@@ -159,7 +120,6 @@ impl SipBridgeManager {
         remote_host: String,
         remote_port: u16,
         transport: String,
-        allow_insecure: bool,
     ) {
         let ws_stream = match accept_async(stream).await {
             Ok(ws) => ws,
@@ -173,7 +133,7 @@ impl SipBridgeManager {
 
         match transport.as_str() {
             "tls" => {
-                Self::proxy_stream_tls(ws_stream, &remote_host, remote_port, allow_insecure).await;
+                Self::proxy_stream_tls(ws_stream, &remote_host, remote_port).await;
             }
             "tcp" => {
                 Self::proxy_stream_tcp(ws_stream, &remote_host, remote_port).await;
@@ -207,7 +167,7 @@ impl SipBridgeManager {
         Self::bidirectional_forward(ws_stream, tcp_read, tcp_write, "TCP").await;
     }
 
-    async fn proxy_stream_tls<S>(ws_stream: S, remote_host: &str, remote_port: u16, allow_insecure: bool)
+    async fn proxy_stream_tls<S>(ws_stream: S, remote_host: &str, remote_port: u16)
     where
         S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
             + SinkExt<Message, Error = tokio_tungstenite::tungstenite::Error>
@@ -223,25 +183,28 @@ impl SipBridgeManager {
             }
         };
 
-        let config = if allow_insecure {
-            ClientConfig::builder()
-                .dangerous()
-                .with_custom_certificate_verifier(Arc::new(NoCertVerifier))
-                .with_no_client_auth()
-        } else {
-            let mut root_store = RootCertStore::empty();
-            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-            ClientConfig::builder()
-                .with_root_certificates(root_store)
-                .with_no_client_auth()
-        };
+        // Fail-closed: system roots only, no insecure skip, no custom
+        // verifier. Private-IP PBX certificates belong to the native
+        // `sip_core` path (deployment CA), not this legacy bridge.
+        let mut root_store = RootCertStore::empty();
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        let config = ClientConfig::builder()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
 
         let connector = TlsConnector::from(Arc::new(config));
+        // Strict SNI: IP literals become IP SANs, DNS names become DNS SNI.
+        // Anything else fails closed — there is no placeholder fallback.
         let server_name = if let Ok(ip) = remote_host.parse::<std::net::IpAddr>() {
             ServerName::IpAddress(ip.into())
         } else {
-            ServerName::try_from(remote_host.to_string())
-                .unwrap_or_else(|_| ServerName::try_from("asterisk.local".to_string()).unwrap())
+            match ServerName::try_from(remote_host.to_string()) {
+                Ok(name) => name,
+                Err(e) => {
+                    log::error!("Invalid TLS server name '{remote_host}': {e}");
+                    return;
+                }
+            }
         };
 
         let tls_stream = match connector.connect(server_name, tcp).await {
@@ -414,29 +377,29 @@ mod tests {
 
     #[test]
     fn test_translate_ws_to_remote_preserves_contact_transport_ws() {
-        let sip_msg = "REGISTER sip:10.41.113.71 SIP/2.0\r\n\
+        let sip_msg = "REGISTER sip:pbx.example.com SIP/2.0\r\n\
 Via: SIP/2.0/WS 127.0.0.1:8100;branch=z9hG4bK12345\r\n\
-From: <sip:guest-2001@10.41.113.71>;tag=tag123\r\n\
-To: <sip:guest-2001@10.41.113.71>\r\n\
+From: <sip:2001@pbx.example.com>;tag=tag123\r\n\
+To: <sip:2001@pbx.example.com>\r\n\
 Call-ID: call-id-123\r\n\
 CSeq: 1 REGISTER\r\n\
-Contact: <sip:guest-2001@abcdef123456.invalid;transport=ws>;expires=600\r\n\r\n";
+Contact: <sip:2001@abcdef123456.invalid;transport=ws>;expires=600\r\n\r\n";
 
         let translated = translate_ws_to_remote(sip_msg, "TLS");
         assert!(translated.contains("Via: SIP/2.0/TLS 127.0.0.1:8100;branch=z9hG4bK12345"));
-        assert!(translated.contains("Contact: <sip:guest-2001@abcdef123456.invalid;transport=ws>;expires=600"));
+        assert!(translated.contains("Contact: <sip:2001@abcdef123456.invalid;transport=ws>;expires=600"));
         assert!(!translated.contains(";transport=tls"));
     }
 
     #[test]
     fn test_translate_ws_to_remote_udp() {
-        let sip_msg = "REGISTER sip:10.41.113.71 SIP/2.0\r\n\
+        let sip_msg = "REGISTER sip:pbx.example.com SIP/2.0\r\n\
 Via: SIP/2.0/WS 127.0.0.1:8100;branch=z9hG4bK12345\r\n\
-Contact: <sip:guest-2001@abcdef123456.invalid;transport=ws>\r\n\r\n";
+Contact: <sip:2001@abcdef123456.invalid;transport=ws>\r\n\r\n";
 
         let translated = translate_ws_to_remote(sip_msg, "UDP");
         assert!(translated.contains("Via: SIP/2.0/UDP 127.0.0.1:8100;branch=z9hG4bK12345"));
-        assert!(translated.contains("Contact: <sip:guest-2001@abcdef123456.invalid;transport=ws>"));
+        assert!(translated.contains("Contact: <sip:2001@abcdef123456.invalid;transport=ws>"));
         assert!(!translated.contains(";transport=udp"));
     }
 
@@ -447,5 +410,28 @@ Via: SIP/2.0/TLS 127.0.0.1:8100;branch=z9hG4bK12345\r\n\r\n";
 
         let ws_msg = translate_remote_to_ws(pbx_msg, "TLS");
         assert!(ws_msg.contains("Via: SIP/2.0/WS 127.0.0.1:8100;branch=z9hG4bK12345"));
+    }
+
+    #[test]
+    fn no_accept_all_verifier_in_bridge() {
+        // Fail-closed guard: the legacy bridge must never reintroduce an
+        // accept-all verifier, an insecure-skip flag, a placeholder SNI
+        // fallback, or hardcoded fixture addresses. (Needles are assembled
+        // so this test's own source never contains them.)
+        let no_cert = ["No", "Cert", "Verifier"].concat();
+        let insecure = ["allow", "_insecure"].concat();
+        let custom_verifier = ["with_custom_certificate", "_verifier"].concat();
+        let fallback = ["asterisk", ".local"].concat();
+        let src = include_str!("sip_bridge.rs");
+        for needle in [no_cert, insecure, custom_verifier, fallback] {
+            assert!(
+                !src.contains(&needle),
+                "sip_bridge.rs must stay fail-closed (found {needle:?})"
+            );
+        }
+        assert!(
+            !src.contains(&["10", "41", "113", "71"].join(".")),
+            "sip_bridge.rs must not hardcode fixture addresses"
+        );
     }
 }

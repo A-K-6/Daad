@@ -15,6 +15,41 @@ import { soundService } from './soundService';
 import { callHistoryService } from './callHistoryService';
 import { audioDeviceService } from './audioDeviceService';
 
+/**
+ * Legacy web sip.js path — DISABLED by default in the desktop MVP.
+ *
+ * The production path is the native Rust SIP core via `nativeSipClient`.
+ * This module only activates when explicitly opted in for development:
+ *   VITE_DEV_LEGACY_WS=1  (vite env, `DEV_LEGACY_WS` prefix not allowed — use VITE_)
+ * or `globalThis.__DEV_LEGACY_WS__ === true` (tests).
+ *
+ * CI lint fails if the flag is enabled in a prod build and if the default
+ * desktop path (App/context/components) imports this module.
+ */
+export function isLegacySipEnabled(): boolean {
+  try {
+    const env = (import.meta as unknown as { env?: Record<string, string | undefined> })?.env;
+    if (env?.VITE_DEV_LEGACY_WS === '1' || env?.DEV_LEGACY_WS === '1') return true;
+  } catch {
+    /* noop */
+  }
+  try {
+    if ((globalThis as unknown as { __DEV_LEGACY_WS__?: boolean }).__DEV_LEGACY_WS__ === true) return true;
+  } catch {
+    /* noop */
+  }
+  return false;
+}
+
+export function assertLegacySipEnabled(caller: string): void {
+  if (!isLegacySipEnabled()) {
+    throw new Error(
+      `Legacy sip.js path disabled (${caller}). Desktop MVP uses the native Rust core via nativeSipClient. ` +
+        `Set VITE_DEV_LEGACY_WS=1 for local legacy development only.`,
+    );
+  }
+}
+
 type ConnectionStateListener = (state: ConnectionState, error?: string) => void;
 type CallStateListener = (state: CallState, info: CallInfo | null) => void;
 type IncomingCallListener = (invitation: Invitation, caller: string) => void;
@@ -40,7 +75,8 @@ export function buildUserAgentOptions(
     uri,
     transportOptions: {
       server: transportServer,
-      traceSip: true,
+      // Never trace raw SIP in the MVP — traces may contain credentials/SDP.
+      traceSip: false,
       keepAliveInterval: 25,
     },
     authorizationUsername: config.username.trim(),
@@ -190,6 +226,7 @@ class SipService {
    * primary WebSocket registration.
    */
   public async connectAndRegister(config: SipConfig): Promise<void> {
+    assertLegacySipEnabled('connectAndRegister');
     const run = this.lifecycleGate ? this.lifecycleGate.then(() => undefined) : Promise.resolve();
     this.lifecycleGate = run
       .then(() => this.connectAndRegisterInternal(config))
@@ -365,11 +402,14 @@ class SipService {
     if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
+        // Legacy sip.js WebSocket-compat bridge. Fail-closed server-side:
+        // TLS always verifies against system roots (the insecure-skip flag
+        // was removed; see sip_bridge.rs). The native `sip_*` path never
+        // uses this bridge — it owns verified TLS directly in Rust.
         const bridge = await invoke<{ local_ws_url: string }>('start_sip_bridge', {
           remoteHost,
           remotePort,
           transport,
-          allowInsecure: true,
         });
         console.log(`Native SIP bridge started: ${transport.toUpperCase()} -> ${remoteHost}:${remotePort} via ${bridge.local_ws_url}`);
         return bridge.local_ws_url;
@@ -385,6 +425,7 @@ class SipService {
    * Initiate an outgoing audio call
    */
   public async makeCall(target: string): Promise<void> {
+    assertLegacySipEnabled('makeCall');
     if (!this.userAgent) {
       throw new Error('SIP client not connected');
     }

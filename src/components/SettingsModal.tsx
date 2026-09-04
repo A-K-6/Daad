@@ -150,10 +150,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       {activeTab === 'credentials' && (
         <form onSubmit={handleSubmit} className="space-y-3 py-1 text-xs">
           {/* Status Banner */}
-          {connectionState === 'RegistrationFailed' && connectionError && (
-            <div className="p-2.5 rounded-md bg-[var(--danger-bg)] border border-[var(--stroke-2)] text-[var(--danger-fg)] text-[12px] flex items-start space-x-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{connectionError}</span>
+          {(connectionState === 'RegistrationFailed' ||
+            connectionState === 'AuthFailed' ||
+            connectionState === 'CertFailed' ||
+            connectionState === 'MicFailed' ||
+            connectionState === 'NoReachableContact') &&
+            connectionError && (
+              <div className="p-2.5 rounded-md bg-[var(--danger-bg)] border border-[var(--stroke-2)] text-[var(--danger-fg)] text-[12px] flex items-start space-x-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  {connectionState}: {connectionError}
+                </span>
+              </div>
+            )}
+
+          {(connectionState === 'Registering' ||
+            connectionState === 'Reconnecting' ||
+            connectionState === 'NetworkConnected' ||
+            connectionState === 'TlsVerified') && (
+            <div className="p-2.5 rounded-md bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[12px] font-mono">
+              {connectionState}…
             </div>
           )}
 
@@ -287,7 +303,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div className="pt-2 flex items-center space-x-2">
-            {connectionState === 'Registered' || connectionState === 'Connecting' ? (
+            {connectionState === 'Registered' ||
+            connectionState === 'Connecting' ||
+            connectionState === 'Registering' ||
+            connectionState === 'Reconnecting' ? (
               <Button
                 type="button"
                 appearance="secondary"
@@ -302,7 +321,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               appearance="primary"
               style={{ flex: 1, fontWeight: 600 }}
             >
-              {connectionState === 'Connecting' ? 'Connecting...' : 'Save & Connect'}
+              {connectionState === 'Connecting' || connectionState === 'Registering' ? 'Connecting...' : 'Save & Connect'}
             </Button>
           </div>
         </form>

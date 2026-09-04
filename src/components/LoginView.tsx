@@ -11,6 +11,26 @@ interface LoginViewProps {
   onLogin: (config: SipConfig) => Promise<void>;
 }
 
+function failureTitle(state: ConnectionState): string {
+  switch (state) {
+    case 'AuthFailed':
+      return 'Authentication failed';
+    case 'CertFailed':
+      return 'Certificate trust failed';
+    case 'MicFailed':
+      return 'Microphone unavailable';
+    case 'NoReachableContact':
+      return 'No reachable contact';
+    case 'Reconnecting':
+      return 'Reconnecting…';
+    case 'Registering':
+    case 'Connecting':
+      return 'Registering…';
+    default:
+      return 'Registration failed';
+  }
+}
+
 export const LoginView: React.FC<LoginViewProps> = ({
   initialConfig,
   connectionState,
@@ -97,7 +117,19 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
   };
 
-  const isConnecting = connectionState === 'Connecting';
+  const isConnecting =
+    connectionState === 'Connecting' ||
+    connectionState === 'Registering' ||
+    connectionState === 'Reconnecting' ||
+    connectionState === 'NetworkConnected' ||
+    connectionState === 'TlsVerified';
+  const showFailure =
+    (connectionState === 'RegistrationFailed' ||
+      connectionState === 'AuthFailed' ||
+      connectionState === 'CertFailed' ||
+      connectionState === 'MicFailed' ||
+      connectionState === 'NoReachableContact') &&
+    connectionError;
 
   return (
     <div className="flex flex-col h-full justify-between p-5 select-none overflow-y-auto bg-[var(--surface-1)]">
@@ -112,14 +144,29 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
       {/* Login Form */}
       <form onSubmit={handleSubmit} className="space-y-3.5 my-auto py-1">
-        {/* Connection Failure Banner */}
-        {connectionState === 'RegistrationFailed' && connectionError && (
+        {/* Connection Failure Banner — distinct per Rust status.message */}
+        {showFailure && (
           <div className="p-2.5 rounded-md bg-[var(--danger-bg)] border border-[var(--stroke-2)] text-[var(--danger-fg)] text-[12px] flex items-start space-x-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <span className="font-semibold block">Authentication Failed</span>
+              <span className="font-semibold block">{failureTitle(connectionState)}</span>
               <span className="leading-tight">{connectionError}</span>
             </div>
+          </div>
+        )}
+
+        {(connectionState === 'NetworkConnected' ||
+          connectionState === 'TlsVerified' ||
+          connectionState === 'Registering' ||
+          connectionState === 'Reconnecting') && (
+          <div
+            data-testid="login-progress"
+            className="p-2.5 rounded-md bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[12px] font-mono"
+          >
+            {connectionState === 'NetworkConnected' && 'Network connected — verifying TLS…'}
+            {connectionState === 'TlsVerified' && 'TLS verified — registering…'}
+            {connectionState === 'Registering' && 'Registering with PBX…'}
+            {connectionState === 'Reconnecting' && 'Reconnecting — retrying registration…'}
           </div>
         )}
 

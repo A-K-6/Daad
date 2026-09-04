@@ -1,4 +1,4 @@
-import { sipService } from '@/services/sipService';
+import { sipService, assertLegacySipEnabled } from '@/services/sipService';
 import { soundService } from '@/services/soundService';
 import { audioDeviceService, AudioDevice } from '@/services/audioDeviceService';
 import { callHistoryService } from '@/services/callHistoryService';
@@ -56,8 +56,10 @@ export class DaadClient {
 
   /**
    * Connect and register to SIP PBX (TLS 5061, TCP 5060, UDP 5060, or WSS)
+   * Legacy web path only — requires VITE_DEV_LEGACY_WS=1. Desktop uses nativeSipClient.
    */
   public async connect(config?: SipConfig): Promise<void> {
+    assertLegacySipEnabled('DaadClient.connect');
     const targetConfig = config || this.config;
     if (!targetConfig) {
       throw new Error('No SIP configuration provided to DaadClient.connect()');
@@ -77,6 +79,7 @@ export class DaadClient {
    * Place outbound voice call to extension or phone number
    */
   public async call(target: string): Promise<void> {
+    assertLegacySipEnabled('DaadClient.call');
     await sipService.makeCall(target);
   }
 
@@ -84,6 +87,7 @@ export class DaadClient {
    * Answer active incoming call
    */
   public async answer(): Promise<void> {
+    assertLegacySipEnabled('DaadClient.answer');
     await sipService.answerCall();
   }
 
@@ -91,6 +95,7 @@ export class DaadClient {
    * Reject / decline incoming call
    */
   public async reject(): Promise<void> {
+    assertLegacySipEnabled('DaadClient.reject');
     await sipService.rejectCall();
   }
 
@@ -98,6 +103,7 @@ export class DaadClient {
    * Hang up active call
    */
   public async hangup(): Promise<void> {
+    assertLegacySipEnabled('DaadClient.hangup');
     await sipService.hangup();
   }
 
@@ -105,6 +111,7 @@ export class DaadClient {
    * Toggle local microphone mute
    */
   public toggleMute(): boolean {
+    assertLegacySipEnabled('DaadClient.toggleMute');
     this.isMuted = !this.isMuted;
     sipService.mute(this.isMuted);
     return this.isMuted;
@@ -114,6 +121,7 @@ export class DaadClient {
    * Toggle call hold / unhold (re-INVITE)
    */
   public async toggleHold(): Promise<boolean> {
+    assertLegacySipEnabled('DaadClient.toggleHold');
     this.isHeld = !this.isHeld;
     await sipService.hold(this.isHeld);
     return this.isHeld;
@@ -123,6 +131,7 @@ export class DaadClient {
    * Send RFC 4733 / DTMF tone over active call
    */
   public sendDTMF(tone: string): void {
+    assertLegacySipEnabled('DaadClient.sendDTMF');
     soundService.playDtmf(tone);
     sipService.sendDTMF(tone);
   }

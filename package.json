@@ -8,6 +8,7 @@
     "dev": "vite",
     "dev:phone": "HTTPS=true vite",
     "typecheck": "tsc --noEmit",
+    "lint": "node scripts/lint.mjs",
     "build": "vite build",
     "build:check": "tsc --noEmit && vite build",
     "test": "vitest run",

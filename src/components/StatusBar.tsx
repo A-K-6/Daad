@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, AlertCircle, LogOut, Sparkles } from 'lucide-react';
-import { ConnectionState, SipConfig } from '@/types';
+import { ConnectionState, SipConfig, CertTrustStatus } from '@/types';
 import { updateService } from '@/services';
 import { DaadLogo } from '@/components/DaadLogo';
+import { CertTrustBadge } from '@/components/CertTrustBadge';
 import { texts } from '@/styles/fluent';
 
 interface StatusBarProps {
   connectionState: ConnectionState;
   connectionError: string | null;
   config: SipConfig;
+  certStatus?: CertTrustStatus;
   onOpenSettings: () => void;
   onOpenUpdates?: () => void;
   onLogout?: () => void;
@@ -18,6 +20,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   connectionState,
   connectionError,
   config,
+  certStatus = 'unknown',
   onOpenSettings,
   onOpenUpdates,
   onLogout,
@@ -37,8 +40,16 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       case 'Registered':
         return 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]';
       case 'Connecting':
+      case 'NetworkConnected':
+      case 'TlsVerified':
+      case 'Registering':
+      case 'Reconnecting':
         return 'bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(251,191,36,0.7)]';
       case 'RegistrationFailed':
+      case 'AuthFailed':
+      case 'CertFailed':
+      case 'MicFailed':
+      case 'NoReachableContact':
         return 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.7)]';
       case 'Disconnected':
       default:
@@ -52,6 +63,22 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         return config.displayName || config.username || 'Registered';
       case 'Connecting':
         return 'Connecting...';
+      case 'NetworkConnected':
+        return 'Network connected';
+      case 'TlsVerified':
+        return 'TLS verified';
+      case 'Registering':
+        return 'Registering...';
+      case 'Reconnecting':
+        return 'Reconnecting...';
+      case 'AuthFailed':
+        return 'Auth failed';
+      case 'CertFailed':
+        return 'Cert failed';
+      case 'MicFailed':
+        return 'Mic failed';
+      case 'NoReachableContact':
+        return 'No reachable contact';
       case 'RegistrationFailed':
         return 'Failed to Register';
       case 'Disconnected':
@@ -71,11 +98,22 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               {getStatusText()}
             </h1>
           </div>
-          <p className="text-[11px] text-[var(--fg-3)] font-mono truncate">
+          <p
+            data-testid="status-message"
+            title={connectionError || undefined}
+            className="text-[11px] text-[var(--fg-3)] font-mono truncate"
+          >
             {connectionState === 'Registered'
               ? config.sipUri
               : connectionError || 'Configure SIP in Settings'}
           </p>
+          {(connectionState === 'Registered' ||
+            connectionState === 'TlsVerified' ||
+            connectionState === 'CertFailed') && (
+            <div className="mt-1">
+              <CertTrustBadge status={certStatus} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -107,6 +145,19 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           </button>
         )}
 
+        {(connectionState === 'AuthFailed' ||
+          connectionState === 'CertFailed' ||
+          connectionState === 'MicFailed' ||
+          connectionState === 'NoReachableContact') && (
+          <button
+            onClick={onOpenSettings}
+            className="p-1.5 text-rose-400 hover:opacity-80 transition-colors active:scale-95"
+            title={connectionError || 'Connection failure'}
+          >
+            <AlertCircle className="w-4 h-4" />
+          </button>
+        )}
+
         <button
           onClick={onOpenSettings}
           className={`p-1.5 ${texts['text-fg-3']} hover:text-[var(--fg-1)] hover:bg-[var(--surface-4)] rounded-md transition-all`}
@@ -115,7 +166,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           <Settings className="w-4 h-4" />
         </button>
 
-        {onLogout && (connectionState === 'Registered' || connectionState === 'Connecting') && (
+        {onLogout && (connectionState === 'Registered' || connectionState === 'Connecting' || connectionState === 'Registering' || connectionState === 'Reconnecting') && (
           <button
             onClick={onLogout}
             className="p-1.5 text-[var(--fg-3)] hover:text-[var(--danger-fg)] hover:bg-[var(--danger-bg)] rounded-md transition-all"

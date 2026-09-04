@@ -1,0 +1,26 @@
+name: daad-asterisk-fixture
+services:
+  asterisk:
+    build: ..
+    image: daad-asterisk-fixture:20
+    container_name: daad-asterisk-test
+    ports:
+      - "5060:5060/tcp"
+      - "5060:5060/udp"
+      - "5061:5061/tcp"
+      - "10000-10199:10000-10199/udp"
+    volumes:
+      - ../config/pjsip.conf:/etc/asterisk/pjsip.conf:ro
+      - ../config/extensions.conf:/etc/asterisk/extensions.conf:ro
+      - ../config/rtp.conf:/etc/asterisk/rtp.conf:ro
+      - ../config/logger.conf:/etc/asterisk/logger.conf:ro
+      - ../certs:/etc/asterisk/keys:ro
+    environment:
+      # Fill from a local .env (gitignored). Placeholders only in repo.
+      - DAAD_TEST_PASSWORD_1001=${DAAD_TEST_PASSWORD_1001:-changeme-1001}
+      - DAAD_TEST_PASSWORD_1002=${DAAD_TEST_PASSWORD_1002:-changeme-1002}
+    command: >
+      sh -c "envsubst '$$DAAD_TEST_PASSWORD_1001 $$DAAD_TEST_PASSWORD_1002'
+      < /etc/asterisk/pjsip.conf > /tmp/pjsip.conf &&
+      cp /tmp/pjsip.conf /etc/asterisk/pjsip.conf &&
+      exec asterisk -f -vvv"

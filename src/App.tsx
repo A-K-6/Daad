@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { SipProvider, useSip, useTheme } from '@/context';
 import {
   StatusBar,
-  LoginView,
   DialerPad,
   RecentCallsView,
   ActiveCallView,
@@ -10,6 +9,8 @@ import {
   SettingsModal,
   UpdateModal,
   LandingHero,
+  ProvisioningView,
+  DiagnosticsPanel,
 } from '@/components';
 import { SipConfig } from '@/types';
 import { updateService } from '@/services';
@@ -40,6 +41,8 @@ const MainSoftphone: React.FC = () => {
     callInfo,
     callHistory,
     hasLoggedIn,
+    certStatus,
+    audioRoute,
     connect,
     login,
     logout,
@@ -50,6 +53,8 @@ const MainSoftphone: React.FC = () => {
     toggleMute,
     toggleHold,
     sendDTMF,
+    setAudioRoute,
+    exportDiagnostics,
     clearCallHistory,
   } = useSip();
 
@@ -62,16 +67,6 @@ const MainSoftphone: React.FC = () => {
     if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
       setIsTauri(true);
     }
-  }, []);
-
-  // Auto connect on startup if credentials exist
-  useEffect(() => {
-    if (config.serverUrl && config.username && config.password) {
-      connect(config).catch((e) => {
-        console.warn('Initial SIP auto-connect failed:', e);
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Background update check on startup
@@ -97,14 +92,22 @@ const MainSoftphone: React.FC = () => {
     callState === 'Active' ||
     callState === 'Holding';
 
+  const isFailure =
+    connectionState === 'RegistrationFailed' ||
+    connectionState === 'AuthFailed' ||
+    connectionState === 'CertFailed' ||
+    connectionState === 'MicFailed' ||
+    connectionState === 'NoReachableContact';
+
   const softphoneWidget = (
-    <div className="flex flex-col h-screen max-h-[600px] w-full max-w-[360px] bg-[var(--surface-1)] text-[var(--fg-1)] relative overflow-hidden font-sans select-none rounded-2xl border border-[var(--stroke-2)] shadow-[var(--shadow-8)]">
+    <div className="flex flex-col h-screen max-h-[600px] w-full max-w-[360px] bg-[#090a0f] text-zinc-200 relative overflow-hidden font-sans select-none rounded-2xl border border-white/[0.08] shadow-[var(--shadow-8)]">
       {!hasLoggedIn ? (
-        <LoginView
+        <ProvisioningView
           initialConfig={config}
           connectionState={connectionState}
           connectionError={connectionError}
-          onLogin={login}
+          certStatus={certStatus}
+          onProvision={login}
         />
       ) : (
         <>
@@ -113,32 +116,53 @@ const MainSoftphone: React.FC = () => {
             connectionState={connectionState}
             connectionError={connectionError}
             config={config}
+            certStatus={certStatus}
             onOpenSettings={() => setShowSettings(true)}
             onOpenUpdates={() => setShowUpdates(true)}
             onLogout={logout}
           />
 
+          {connectionState === 'Reconnecting' && (
+            <div
+              role="status"
+              className="px-3 py-1.5 bg-[#0c0e15] border-b border-white/[0.08] text-[11px] font-mono text-amber-300 text-center"
+            >
+              Reconnecting — retrying registration…
+            </div>
+          )}
+
+          {isFailure && connectionError && (
+            <div
+              role="alert"
+              className="px-3 py-1.5 bg-[#0c0e15] border-b border-white/[0.08] text-[11px] font-mono text-rose-300 text-center"
+            >
+              {connectionState}: {connectionError}
+            </div>
+          )}
+
           {/* Main Dialer or In-Call Interface */}
-          <main className="flex-1 relative overflow-hidden flex flex-col bg-[var(--surface-1)]">
+          <main className="flex-1 relative overflow-hidden flex flex-col bg-[#090a0f]">
             {isCallActiveOrOutgoing ? (
               <ActiveCallView
                 callState={callState}
                 callInfo={callInfo}
+                audioRoute={audioRoute}
                 onHangup={hangup}
                 onToggleMute={toggleMute}
                 onToggleHold={toggleHold}
                 onSendDtmf={sendDTMF}
+                onAudioRoute={setAudioRoute}
               />
             ) : (
               <div className="flex flex-col h-full justify-between">
                 {/* Tab Selector */}
-                <div className="flex p-2 space-x-1 border-b border-[var(--stroke-2)]">
+                <div className="flex p-2 space-x-1 border-b border-white/[0.08]">
                   <button
                     onClick={() => setActiveDialerTab('keypad')}
-                    className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 rounded-md text-sm font-medium transition-all ${
+                    className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 rounded-md text-sm font-medium transition-all active:scale-95 ${
                       activeDialerTab === 'keypad'
-                        ? 'text-[var(--accent)] bg-[var(--surface-2)] border border-[var(--stroke-2)]'
-                        : 'text-[var(--fg-3)] hover:text-[var(--fg-1)]'
+                        ? 'text-zinc-100 bg-[#13151f] border border-white/[0.08]'
+                        : 'text-zinc-500 hover:text-zinc-200'
                     }`}
                   >
                     <Phone className="w-4 h-4" />
@@ -146,16 +170,16 @@ const MainSoftphone: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setActiveDialerTab('history')}
-                    className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 rounded-md text-sm font-medium transition-all ${
+                    className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 rounded-md text-sm font-medium transition-all active:scale-95 ${
                       activeDialerTab === 'history'
-                        ? 'text-[var(--accent)] bg-[var(--surface-2)] border border-[var(--stroke-2)]'
-                        : 'text-[var(--fg-3)] hover:text-[var(--fg-1)]'
+                        ? 'text-zinc-100 bg-[#13151f] border border-white/[0.08]'
+                        : 'text-zinc-500 hover:text-zinc-200'
                     }`}
                   >
                     <Clock className="w-4 h-4" />
                     <span>Recents</span>
                     {callHistory.length > 0 && (
-                      <span className="ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-[var(--accent-subtle)] text-[var(--accent)] font-mono">
+                      <span className="ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-[#13151f] text-zinc-300 font-mono border border-white/[0.08]">
                         {callHistory.length}
                       </span>
                     )}
@@ -171,14 +195,19 @@ const MainSoftphone: React.FC = () => {
                       onOpenSettings={() => setShowSettings(true)}
                     />
                   ) : (
-                    <RecentCallsView
-                      records={callHistory}
-                      onCall={(target) => {
-                        setActiveDialerTab('keypad');
-                        makeCall(target);
-                      }}
-                      onClear={clearCallHistory}
-                    />
+                    <div className="flex flex-col h-full overflow-y-auto">
+                      <RecentCallsView
+                        records={callHistory}
+                        onCall={(target) => {
+                          setActiveDialerTab('keypad');
+                          makeCall(target);
+                        }}
+                        onClear={clearCallHistory}
+                      />
+                      <div className="p-3">
+                        <DiagnosticsPanel onExport={exportDiagnostics} />
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -221,7 +250,7 @@ const MainSoftphone: React.FC = () => {
   // If inside native Tauri window, render only the softphone
   if (isTauri) {
     return (
-      <div className="flex justify-center items-center h-screen w-screen bg-[var(--surface-1)] overflow-hidden">
+      <div className="flex justify-center items-center h-screen w-screen bg-[#090a0f] overflow-hidden">
         <div className="absolute top-4 right-4 z-10">
           <ThemeToggle />
         </div>
@@ -232,7 +261,7 @@ const MainSoftphone: React.FC = () => {
 
   // If on web, render landing showcase page
   return (
-    <div className="min-h-screen w-full bg-[var(--surface-2)] flex items-center justify-center p-4 lg:p-12 overflow-x-hidden">
+    <div className="min-h-screen w-full bg-[#0c0e15] flex items-center justify-center p-4 lg:p-12 overflow-x-hidden">
       <div className="absolute top-4 right-4 z-10">
         <ThemeToggle />
       </div>

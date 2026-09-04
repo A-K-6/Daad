@@ -1,0 +1,4 @@
+certs/
+captures/*.pcap
+captures/*.pcapng
+.env

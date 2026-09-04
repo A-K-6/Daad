@@ -58,8 +58,30 @@ describe('LoginView Component', () => {
       />
     );
 
-    expect(screen.getByText('Authentication Failed')).toBeInTheDocument();
+    expect(screen.getByText('Registration failed')).toBeInTheDocument();
     expect(screen.getByText('Unauthorized: Invalid Password')).toBeInTheDocument();
+  });
+
+  it('shows distinct failure titles from Rust status messages', () => {
+    const { rerender } = render(
+      <LoginView
+        initialConfig={mockConfig}
+        connectionState="AuthFailed"
+        connectionError="401 Unauthorized"
+        onLogin={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Authentication failed')).toBeInTheDocument();
+    rerender(
+      <LoginView
+        initialConfig={mockConfig}
+        connectionState="CertFailed"
+        connectionError="self-signed certificate"
+        onLogin={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Certificate trust failed')).toBeInTheDocument();
+    expect(screen.getByText('self-signed certificate')).toBeInTheDocument();
   });
 
   it('calls onLogin with formData on submit', () => {

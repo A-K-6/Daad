@@ -11,26 +11,30 @@ import {
   Check,
   X,
 } from 'lucide-react';
-import { CallState, CallInfo } from '@/types';
+import { CallState, CallInfo, AudioRoute } from '@/types';
 import { DtmfKeypadModal } from '@/components/DtmfKeypadModal';
 import { audioDeviceService, AudioDevice } from '@/services/audioDeviceService';
 
 interface ActiveCallViewProps {
   callState: CallState;
   callInfo: CallInfo | null;
+  audioRoute?: AudioRoute;
   onHangup: () => void;
   onToggleMute: () => void;
   onToggleHold: () => void;
   onSendDtmf: (tone: string) => void;
+  onAudioRoute?: (route: AudioRoute) => void;
 }
 
 export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
   callState,
   callInfo,
+  audioRoute = 'system',
   onHangup,
   onToggleMute,
   onToggleHold,
   onSendDtmf,
+  onAudioRoute,
 }) => {
   const [showDtmf, setShowDtmf] = useState<boolean>(false);
   const [showAudioMenu, setShowAudioMenu] = useState<boolean>(false);
@@ -282,6 +286,22 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
             </button>
           </div>
           <div className="space-y-1 max-h-36 overflow-y-auto">
+            <div className="grid grid-cols-2 gap-1 pb-2">
+              {(['earpiece', 'speaker', 'bluetooth', 'system'] as AudioRoute[]).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => onAudioRoute?.(r)}
+                  aria-pressed={audioRoute === r}
+                  className={`px-2 py-1 rounded-md border text-[11px] font-mono transition-all active:scale-95 ${
+                    audioRoute === r
+                      ? 'border-white/25 bg-white/10 text-zinc-100'
+                      : 'border-white/[0.08] text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
             {outputDevices.length > 0 ? (
               outputDevices.map((device) => (
                 <button

@@ -1,5 +1,8 @@
 export { StatusBar } from './StatusBar';
 export { LoginView } from './LoginView';
+export { ProvisioningView } from './ProvisioningView';
+export { CertTrustBadge } from './CertTrustBadge';
+export { DiagnosticsPanel } from './DiagnosticsPanel';
 export { DialerPad } from './DialerPad';
 export { RecentCallsView } from './RecentCallsView';
 export { ActiveCallView } from './ActiveCallView';

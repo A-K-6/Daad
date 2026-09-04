@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sipService, buildUserAgentOptions } from './sipService';
 import { SipConfig } from '@/types';
 
-describe('SipService', () => {
+// Legacy sip.js path is opt-in; enable it for these legacy unit tests only.
+(globalThis as unknown as { __DEV_LEGACY_WS__?: boolean }).__DEV_LEGACY_WS__ = true;
+
+describe('SipService (legacy, gated)', () => {
   const sampleConfig: SipConfig = {
     serverUrl: 'wss://pbx.example.com:8089/ws',
     sipUri: 'sip:1001@pbx.example.com',
@@ -89,6 +92,15 @@ describe('SipService', () => {
     await expect(sipService.disconnect()).resolves.not.toThrow();
     expect(sipService.getConnectionState()).toBe('Disconnected');
     expect(sipService.getCallState()).toBe('Idle');
+  });
+
+  it('is disabled by default without the explicit flag', async () => {
+    const g = globalThis as unknown as { __DEV_LEGACY_WS__?: boolean };
+    const prev = g.__DEV_LEGACY_WS__;
+    g.__DEV_LEGACY_WS__ = false;
+    const { assertLegacySipEnabled } = await import('./sipService');
+    expect(() => assertLegacySipEnabled('probe')).toThrow(/disabled/);
+    g.__DEV_LEGACY_WS__ = prev;
   });
 });
 

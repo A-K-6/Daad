@@ -35,6 +35,9 @@ jobs:
       - name: Typecheck TypeScript
         run: bun run typecheck
 
+      - name: Lint Repo Hygiene (aliases, fixture secrets, captures)
+        run: bun run lint
+
       - name: Build Frontend
         run: bun run build
 
@@ -59,3 +62,7 @@ jobs:
       - name: Cargo Check Backend
         working-directory: ./src-tauri
         run: cargo check
+
+      - name: Cargo Test Backend (bridge unit tests)
+        working-directory: ./src-tauri
+        run: cargo test

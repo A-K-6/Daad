@@ -32,3 +32,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 bun.lockb
+
+# Daad Asterisk TEST fixture — generated creds / certs / captures
+docker/asterisk/certs/
+docker/asterisk/captures/*.pcap
+docker/asterisk/captures/*.pcapng
+docker/asterisk/captures/*.log
+!docker/asterisk/captures/*.sanitized.log
+docker/asterisk/.env
