@@ -19,7 +19,8 @@ Must delete before OSS stable:
 
 - ses_f9341a840ffeammz05DKOymL6r — DONE frontend MVP: CA field, Rust timing, legacy gated, 7 states. Verified: 22/129 pass, typecheck+lint ok.
 - ses_f92ded183ffe8R6V3HQoyK3Ow2 — DONE call power (Rust): REFER/Replaces, 2-dialog waiting, interop Opus. Verified: cargo 170/0/1, vitest 133/133, lint ok. Committed 85166ea, pushed.
-- ses_f92bd3389ffeja234RmVZPCrmy — RUNNING transfer/waiting UI (frontend only).
+- ses_f92bd3389ffeja234RmVZPCrmy — DONE transfer/waiting UI: 5 actions, waiting banner, swap, badges. Verified: vitest 145/145, lint ok. Committed b0b06a5, pushed.
+- v0.5.0-3 published with mac+win+linux (MSI fix confirmed). v0.5.0-4 tagged (identity fix + build marker + power protocol + transfer UI) — building.
 
 Order: Phase1 → Phase2 → Phase3 (DTMF/mute/hold/route/focus/reconnect) → Phase4 (packaging/mobile CallKit/ConnectionService separate gate) → Phase5 (interop profiles, never weaken JBM defaults).
 
