@@ -128,6 +128,19 @@ describe('ProvisioningView', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/must match the device username/i);
     expect(onProvision).not.toHaveBeenCalled();
   });
+  it('shows a build marker for triage', () => {
+    render(
+      <ProvisioningView
+        initialConfig={base}
+        connectionState="Disconnected"
+        connectionError={null}
+        certStatus="unknown"
+        onProvision={vi.fn(async () => undefined)}
+      />,
+    );
+    // jsdom has no Tauri runtime — footer falls back to 'dev'.
+    expect(screen.getByTestId('app-version').textContent).toMatch(/build /);
+  });
   it('rejects malformed CA PEM before IPC', () => {
     const onProvision = vi.fn(async () => undefined);
     render(

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, AlertCircle, Server, Shield, FileUp } from 'lucide-react';
 import type { ConnectionState, SipConfig } from '@/types';
 import { CertTrustBadge } from '@/components/CertTrustBadge';
@@ -57,7 +57,25 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
   const [uriMatchError, setUriMatchError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [appVersion, setAppVersion] = useState('dev');
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  // Build marker for triage (which binary is running). Never blocks render.
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const mod = await import('@tauri-apps/api/app');
+        const v = await mod.getVersion();
+        if (live && v) setAppVersion(v);
+      } catch {
+        /* web/dev fallback stays 'dev' */
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const checkUriMatch = (sipUri: string, username: string): string | null => {
     const uriUser = usernameFromSipUri(sipUri);
@@ -369,6 +387,9 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
         </button>
         <p className="text-[10px] text-zinc-600 font-mono text-center">
           Password and CA are sent to Rust via IPC once and cleared from this form.
+        </p>
+        <p data-testid="app-version" className="text-[10px] text-zinc-700 font-mono text-center">
+          build {appVersion}
         </p>
       </form>
     </div>
