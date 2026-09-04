@@ -81,18 +81,19 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Daad Softphone ${{ github.ref_name }}'
           releaseBody: |
-            ### 📞 Daad Softphone Desktop ${{ github.ref_name }}
-            
-            Ultra-fast, minimal, modern cross-platform softphone client built with Tauri v2, SIP.js (v0.21+), React, and Tailwind CSS.
-            
-            #### 📦 Downloads:
+            ### Daad Softphone Native MVP Alpha ${{ github.ref_name }}
+
+            Native Rust SIP/TLS + SDES-SRTP MVP (PCMU/PCMA, RFC 4733, numeric extensions).
+            Desktop test build — live Asterisk proof pending. Configure host/port/CA in Provisioning, never hardcodes IPs.
+
+            #### Downloads:
             - **macOS (Apple Silicon):** `Daad_${{ github.ref_name }}_aarch64.dmg`
             - **Windows (x64):** `Daad_${{ github.ref_name }}_x64-setup.exe` / `.msi`
             - **Linux (x64):** `Daad_${{ github.ref_name }}_amd64.AppImage` / `.deb`
             
             > **macOS Note:** For unsigned open-source binaries, run `xattr -cr /Applications/Daad.app` in Terminal or click *Open Anyway* in System Settings > Privacy & Security.
           releaseDraft: true
-          prerelease: false
+          prerelease: true
           args: ${{ matrix.args }}
 
   publish:

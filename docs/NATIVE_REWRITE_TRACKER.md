@@ -18,7 +18,7 @@ Must delete before OSS stable:
 - `localStorage` password (`SipContext.tsx:43`), `traceSip:true`
 
 - ses_f9341a840ffeammz05DKOymL6r — DONE frontend MVP: CA field, Rust timing, legacy gated, 7 states. Verified: 22/129 pass, typecheck+lint ok.
-- ses_f9341d30effePQnjNC7EwQ4Tpb — RUNNING Rust wire-up: INVITE on TLS, inbound listener, bridge decommission, CA passthrough, Rust timing.
+- ses_f931bb49bffe14OTTyhr1lxYsm — DONE wire-up verified: cargo 143/0/1, check 0 err/85 warn, vitest 22/129, lint+typecheck clean, NoCertVerifier gone. Committed to feat/native-rewrite-wip (pushed). Only live fixture gate [L] remains.
 
 Order: Phase1 → Phase2 → Phase3 (DTMF/mute/hold/route/focus/reconnect) → Phase4 (packaging/mobile CallKit/ConnectionService separate gate) → Phase5 (interop profiles, never weaken JBM defaults).
 
