@@ -10,7 +10,7 @@ use tauri::{
 };
 use sip_bridge::{BridgeInfo, SipBridgeManager};
 use sip_core::account::{AudioCodec, MediaPolicy, SipProfile, SipTransport};
-use sip_core::call::{CallDirection, CallManager, CallStateNative};
+use sip_core::call::{CallDirection, CallManager, CallStateNative, WhichLeg};
 use sip_core::diagnostics::{sanitize_log, SanitizedDiagnostics};
 use sip_core::keystore::{CredentialStore, KeyringStore};
 use sip_core::register::{self, CSeqGen, RegisterOutcome};
@@ -519,11 +519,17 @@ fn emit_native_call(app: &AppHandle, core: &CoreState, calls: &CallCoreState, mg
 }
 
 /// Route a locally-built wire text to the connection task that owns the
-/// dialog's stream: the incoming leg lives on the registration stream, the
-/// outgoing leg on the outbound call stream.
+/// dialog's stream: inbound legs live on the registration stream, the
+/// primary outgoing leg on the outbound call stream, the consult leg on its
+/// own consult stream (own CSeq space per dialog).
 fn wire_target_for(mgr: &CallManager) -> WireTarget {
-    match mgr.active_peer().map(|(_, d)| d) {
-        Some(CallDirection::Incoming) => WireTarget::Registration,
+    wire_target_for_leg(mgr, mgr.foreground())
+}
+
+fn wire_target_for_leg(mgr: &CallManager, leg: WhichLeg) -> WireTarget {
+    match (leg, mgr.leg_direction(leg)) {
+        (WhichLeg::Second, Some(CallDirection::Outgoing)) => WireTarget::Consult,
+        (_, Some(CallDirection::Incoming)) => WireTarget::Registration,
         _ => WireTarget::Call,
     }
 }
@@ -703,6 +709,7 @@ async fn sip_account_upsert(
         expires_secs: register_expires.unwrap_or(600),
         codecs: vec![AudioCodec::Pcmu, AudioCodec::Pcma],
         media: MediaPolicy::default(),
+        interop_opus: false,
     };
     profile.validate()?;
     // Rotating provisioning while a worker runs: stop it first so the next
@@ -743,6 +750,7 @@ async fn sip_account_remove(
     // The call driver task is aborted first so it can never dispatch into
     // cleared state; queued wire texts are dropped with it.
     callcore.abort_call_task();
+    callcore.abort_consult_task();
     callcore.clear_wire();
     {
         let mut mgr = callcore
@@ -779,6 +787,7 @@ async fn sip_unregister(
     // Going offline ends signalling: stop the call driver, drop queued
     // wire, tear down media, then best-effort Expires:0.
     callcore.abort_call_task();
+    callcore.abort_consult_task();
     callcore.clear_wire();
     {
         let mut mgr = callcore
@@ -829,8 +838,10 @@ async fn sip_call_invite(
         return Err("not registered: run sip_register first".into());
     }
     // Single-call invariant: a stale driver task must never dispatch into
-    // the new leg.
+    // the new leg. A consult leg can never survive a fresh primary invite
+    // (invite() refuses while any leg exists), so its driver goes too.
     callcore.abort_call_task();
+    callcore.abort_consult_task();
     // Open the call stream first — no locks are held across this await.
     let (stream, local_ip, _local_port) = open_signalling(&profile).await?;
     let req = {
@@ -855,7 +866,7 @@ async fn sip_call_invite(
     // 100/180/183, answers 200+SDP with ACK (SRTP negotiated, cpal audio
     // started by the manager), and relays the established leg.
     let app2 = app.clone();
-    let handle = tokio::spawn(outbound_call_task(stream, req, app2));
+    let handle = tokio::spawn(outbound_call_task(stream, req, app2, WhichLeg::Primary, WireTarget::Call));
     *callcore.call_task.lock().unwrap() = Some(handle);
     Ok(())
 }
@@ -1003,6 +1014,231 @@ async fn sip_call_hold(
     Ok(())
 }
 
+/// Answer the waiting second leg: hold the active leg (its `sendonly`
+/// re-INVITE goes out on its stream) and answer waiting with 200 OK on the
+/// registration stream. Media focus moves; exactly one RTP stream stays up.
+#[tauri::command]
+async fn sip_call_answer_waiting(
+    app: AppHandle,
+    core: State<'_, Arc<CoreState>>,
+    callcore: State<'_, CallCoreState>,
+) -> Result<(), String> {
+    let from = native_aor(&core);
+    let (hold_target, hold_req, ok200) = {
+        let mut mgr = callcore
+            .mgr
+            .lock()
+            .map_err(|e| format!("call core poisoned: {e}"))?;
+        let hold_target = wire_target_for_leg(&mgr, mgr.foreground());
+        let (hold_req, ok200) = mgr
+            .answer_waiting(&from)
+            .map_err(|e| sanitize_log(&e.to_string()))?;
+        (hold_target, hold_req, ok200)
+    };
+    callcore.push_wire(hold_target, hold_req);
+    callcore.push_wire(WireTarget::Registration, ok200);
+    {
+        let mut mgr = callcore
+            .mgr
+            .lock()
+            .map_err(|e| format!("call core poisoned: {e}"))?;
+        emit_native_call(&app, &core, &callcore, &mut mgr);
+    }
+    Ok(())
+}
+
+/// Explicit swap: hold the foreground leg, resume the parked leg. Each
+/// re-INVITE goes out on its own leg's stream; empty texts (already-held /
+/// already-active legs) are skipped, never sent.
+#[tauri::command]
+async fn sip_call_swap(
+    app: AppHandle,
+    core: State<'_, Arc<CoreState>>,
+    callcore: State<'_, CallCoreState>,
+) -> Result<(), String> {
+    let from = native_aor(&core);
+    let (t_old, t_new, hold_req, resume_req) = {
+        let mut mgr = callcore
+            .mgr
+            .lock()
+            .map_err(|e| format!("call core poisoned: {e}"))?;
+        let fg = mgr.foreground();
+        let t_old = wire_target_for_leg(&mgr, fg);
+        let t_new = wire_target_for_leg(&mgr, fg.other());
+        let (hold_req, resume_req) = mgr.swap(&from).map_err(|e| sanitize_log(&e.to_string()))?;
+        (t_old, t_new, hold_req, resume_req)
+    };
+    if !hold_req.is_empty() {
+        callcore.push_wire(t_old, hold_req);
+    }
+    if !resume_req.is_empty() {
+        callcore.push_wire(t_new, resume_req);
+    }
+    {
+        let mut mgr = callcore
+            .mgr
+            .lock()
+            .map_err(|e| format!("call core poisoned: {e}"))?;
+        emit_native_call(&app, &core, &callcore, &mut mgr);
+    }
+    Ok(())
+}
+
+/// Start a consultation leg for attended transfer: hold the primary (its
+/// `sendonly` re-INVITE goes on its stream) and dial the numeric consult
+/// target on a fresh verified signalling stream (own CSeq space). The
+/// consult INVITE travels via a dedicated driver task on the `Consult`
+/// queue. Numeric dialing only; JBM media profile unchanged.
+#[tauri::command]
+async fn sip_call_consult(
+    app: AppHandle,
+    core: State<'_, Arc<CoreState>>,
+    callcore: State<'_, CallCoreState>,
+    target: String,
+) -> Result<(), String> {
+    sip_core::validate_extension(target.trim())
+        .map_err(|e| sanitize_log(&e.to_string()))?;
+    let profile = core
+        .profiles
+        .lock()
+        .unwrap()
+        .get(NATIVE_ACCOUNT_ID)
+        .cloned()
+        .ok_or_else(|| "no provisioned account: run sip_account_upsert first".to_string())?;
+    if profile.transport != SipTransport::Tls {
+        return Err("MVP requires the TLS profile (tls://host:5061)".into());
+    }
+    if !core.get_state(NATIVE_ACCOUNT_ID).is_registered() {
+        return Err("not registered: run sip_register first".into());
+    }
+    // Stale consult driver must never dispatch into the new leg.
+    callcore.abort_consult_task();
+    // Open the consult stream first — no locks are held across this await.
+    let (stream, local_ip, _local_port) = open_signalling(&profile).await?;
+    let from = native_aor(&core);
+    let (hold_req, hold_target, invite_req) = {
+        let mut mgr = callcore
+            .mgr
+            .lock()
+            .map_err(|e| format!("call core poisoned: {e}"))?;
+        mgr.set_media_addr(&local_ip);
+        let hold_target = wire_target_for_leg(&mgr, WhichLeg::Primary);
+        let (hold_req, invite_req) = mgr
+            .consult(target.trim(), &from)
+            .map_err(|e| sanitize_log(&e.to_string()))?;
+        (hold_req, hold_target, invite_req)
+    };
+    if !hold_req.is_empty() {
+        callcore.push_wire(hold_target, hold_req);
+    }
+    {
+        let mut mgr = callcore
+            .mgr
+            .lock()
+            .map_err(|e| format!("call core poisoned: {e}"))?;
+        emit_native_call(&app, &core, &callcore, &mut mgr);
+    }
+    let app2 = app.clone();
+    let handle = tokio::spawn(outbound_call_task(
+        stream,
+        invite_req,
+        app2,
+        WhichLeg::Second,
+        WireTarget::Consult,
+    ));
+    *callcore.consult_task.lock().unwrap() = Some(handle);
+    Ok(())
+}
+
+/// Blind transfer (RFC 3515): REFER the foreground leg to a numeric
+/// target (`Refer-To: sip:<target>@<domain>`, `Referred-By` = local AoR).
+/// The 202/NOTIFY outcome arrives on the leg's stream and retires the leg
+/// as `transferred` on final 2xx (zero orphans) or keeps it up on failure.
+#[tauri::command]
+async fn sip_call_transfer_blind(
+    app: AppHandle,
+    core: State<'_, Arc<CoreState>>,
+    callcore: State<'_, CallCoreState>,
+    target: String,
+) -> Result<(), String> {
+    sip_core::validate_extension(target.trim())
+        .map_err(|e| sanitize_log(&e.to_string()))?;
+    let from = native_aor(&core);
+    let domain = core
+        .profiles
+        .lock()
+        .unwrap()
+        .get(NATIVE_ACCOUNT_ID)
+        .map(|p| p.effective_domain().to_string())
+        .unwrap_or_else(|| "local".to_string());
+    let refer_to = format!("sip:{}@{domain}", target.trim());
+    let (wire_target, refer) = {
+        let mut mgr = callcore
+            .mgr
+            .lock()
+            .map_err(|e| format!("call core poisoned: {e}"))?;
+        let wire_target = wire_target_for_leg(&mgr, mgr.foreground());
+        let refer = mgr
+            .blind_transfer_request(target.trim(), &from, &refer_to)
+            .map_err(|e| sanitize_log(&e.to_string()))?;
+        (wire_target, refer)
+    };
+    callcore.push_wire(wire_target, refer);
+    {
+        let mut mgr = callcore
+            .mgr
+            .lock()
+            .map_err(|e| format!("call core poisoned: {e}"))?;
+        emit_native_call(&app, &core, &callcore, &mut mgr);
+    }
+    Ok(())
+}
+
+/// Attended transfer: REFER the held primary leg to the answered consult
+/// target, joining via `Replaces` pointing at the consult dialog. Both
+/// legs retire as `transferred` on final 2xx NOTIFY (media released only
+/// when the last leg goes).
+#[tauri::command]
+async fn sip_call_transfer_attended(
+    app: AppHandle,
+    core: State<'_, Arc<CoreState>>,
+    callcore: State<'_, CallCoreState>,
+) -> Result<(), String> {
+    let from = native_aor(&core);
+    let domain = core
+        .profiles
+        .lock()
+        .unwrap()
+        .get(NATIVE_ACCOUNT_ID)
+        .map(|p| p.effective_domain().to_string())
+        .unwrap_or_else(|| "local".to_string());
+    let (wire_target, refer) = {
+        let mut mgr = callcore
+            .mgr
+            .lock()
+            .map_err(|e| format!("call core poisoned: {e}"))?;
+        let peer = mgr
+            .leg_peer(WhichLeg::Second)
+            .ok_or_else(|| "no consult leg: run sip_call_consult first".to_string())?
+            .to_string();
+        let refer_to = format!("sip:{peer}@{domain}");
+        let wire_target = wire_target_for_leg(&mgr, WhichLeg::Primary);
+        let refer = mgr
+            .attended_transfer_request(&from, &refer_to)
+            .map_err(|e| sanitize_log(&e.to_string()))?;
+        (wire_target, refer)
+    };
+    callcore.push_wire(wire_target, refer);
+    {
+        let mut mgr = callcore
+            .mgr
+            .lock()
+            .map_err(|e| format!("call core poisoned: {e}"))?;
+        emit_native_call(&app, &core, &callcore, &mut mgr);
+    }
+    Ok(())
+}
+
 #[tauri::command]
 async fn sip_call_dtmf(callcore: State<'_, CallCoreState>, tone: String) -> Result<(), String> {
     let ch = tone.chars().next().ok_or_else(|| "empty tone".to_string())?;
@@ -1035,8 +1271,8 @@ async fn sip_audio_route(callcore: State<'_, CallCoreState>, route: String) -> R
 }
 
 /// Secret-free diagnostics snapshot. The webview contract re-sanitizes and
-/// discards the body, but the shape stays honest: state names and counters
-/// only — never URIs, IPs, SDP, or key material.
+/// discards the body, but the shape stays honest: state names, capability
+/// flags and counters only — never URIs, IPs, SDP, or key material.
 #[derive(Debug, Clone, serde::Serialize)]
 struct NativeDiagnostics {
     account_id: String,
@@ -1047,6 +1283,11 @@ struct NativeDiagnostics {
     muted: bool,
     audio_route: String,
     events_total: u64,
+    /// Capability flags (secret-free): Opus interop gate, mandatory SRTP,
+    /// and the two-dialog ceiling.
+    opus_enabled: bool,
+    srtp_required: bool,
+    max_dialogs: u8,
 }
 
 #[tauri::command]
@@ -1055,13 +1296,19 @@ async fn sip_diagnostics_export(
     callcore: State<'_, CallCoreState>,
 ) -> Result<NativeDiagnostics, String> {
     let state = core.get_state(NATIVE_ACCOUNT_ID);
-    let transport = core
+    let (transport, opus_enabled, srtp_required) = core
         .profiles
         .lock()
         .unwrap()
         .get(NATIVE_ACCOUNT_ID)
-        .map(|p| format!("{:?}", p.transport).to_ascii_lowercase())
-        .unwrap_or_else(|| "none".into());
+        .map(|p| {
+            (
+                format!("{:?}", p.transport).to_ascii_lowercase(),
+                p.interop_opus,
+                p.media.srtp_required,
+            )
+        })
+        .unwrap_or_else(|| ("none".into(), false, true));
     let mgr = callcore
         .mgr
         .lock()
@@ -1075,6 +1322,9 @@ async fn sip_diagnostics_export(
         muted: mgr.is_muted(),
         audio_route: mgr.audio_route().as_str().to_string(),
         events_total: core.events_total.load(std::sync::atomic::Ordering::SeqCst),
+        opus_enabled,
+        srtp_required,
+        max_dialogs: 2,
     })
 }
 
@@ -1153,6 +1403,23 @@ fn mutate_call(app: &AppHandle, f: impl FnOnce(&mut CallManager)) {
     }
 }
 
+/// Route one inbound response through the transfer state machine (final
+/// responses to our REFER: 202 arms, 3xx–6xx fails). Returns `true` when
+/// consumed. Sync; never holds a lock across an await.
+fn route_response(app: &AppHandle, head: &str) -> bool {
+    let consumed = match app.try_state::<CallCoreState>() {
+        Some(calls) => match calls.mgr.lock() {
+            Ok(mut mgr) => sip_core::wire::dispatch_response(&mut mgr, head),
+            Err(_) => false,
+        },
+        None => false,
+    };
+    if consumed {
+        mutate_call(app, |_| {});
+    }
+    consumed
+}
+
 /// Write all queued texts for `target`. `false` when the stream broke.
 async fn flush_wire(stream: &mut SignallingStream, app: &AppHandle, target: WireTarget) -> bool {
     let pending: Vec<String> = app
@@ -1229,9 +1496,12 @@ async fn multiplex_until_refresh(
             Ok(Err(_)) => return ListenEnd::StreamBroken,
             Ok(Ok(msg)) => {
                 if msg.is_response {
-                    // Stray responses on the registration stream (e.g. to our
-                    // re-INVITE/BYE): nothing to drive here; logged redacted.
-                    log::debug!("core: registration stream stray response");
+                    // Final responses to our REFER (202/4xx-6xx) drive the
+                    // transfer state machine; anything else on this stream
+                    // (e.g. to re-INVITE/BYE) is logged redacted.
+                    if !route_response(&app, &msg.head) {
+                        log::debug!("core: registration stream stray response");
+                    }
                     continue;
                 }
                 if !handle_inbound_request(&app, stream, &msg).await {
@@ -1242,23 +1512,29 @@ async fn multiplex_until_refresh(
     }
 }
 
-/// Establishing phase of an outbound call: fold 100/180/183, answer a 200 OK
-/// (SDP body → PCMU/PCMA + mandatory SDES negotiation → cpal audio start)
-/// with ACK, map 3xx–6xx (incl. 401/407: INVITE Digest is Phase-2, surfaced
-/// as failure, never retried blind) into teardown. Returns `true` when the
-/// leg reached Active.
-async fn drive_establishing(stream: &mut SignallingStream, app: &AppHandle) -> bool {
+/// Establishing phase of one outgoing leg (primary or consult): fold
+/// 100/180/183, answer a 200 OK (SDP body → PCMU/PCMA + mandatory SDES
+/// negotiation → cpal audio start) with ACK, map 3xx–6xx (incl. 401/407:
+/// INVITE Digest is Phase-2, surfaced as failure, never retried blind) into
+/// teardown. Returns `true` when the leg reached Active. `target` is the
+/// leg's wire queue (Call for primary, Consult for the consult dialog).
+async fn drive_establishing_for(
+    stream: &mut SignallingStream,
+    app: &AppHandle,
+    leg: WhichLeg,
+    target: WireTarget,
+) -> bool {
     use sip_core::call::CallStateNative as S;
     let mut framer = sip_core::wire::SipFramer::new();
     loop {
-        // Queued CANCEL (concurrent hangup) goes first; a terminal manager
+        // Queued CANCEL (concurrent hangup) goes first; a terminal leg
         // means the local side already decided — stop driving.
-        if !flush_wire(stream, app, WireTarget::Call).await {
+        if !flush_wire(stream, app, target).await {
             return false;
         }
         let state = app
             .try_state::<CallCoreState>()
-            .and_then(|c| c.mgr.lock().map(|m| m.state()).ok())
+            .and_then(|c| c.mgr.lock().map(|m| m.leg_state(leg)).ok())
             .unwrap_or(S::Idle);
         if state != S::OutgoingRinging {
             return false;
@@ -1268,29 +1544,41 @@ async fn drive_establishing(stream: &mut SignallingStream, app: &AppHandle) -> b
             Err(e) => {
                 log::warn!("core: {}", sanitize_log(&format!("outbound invite read failed: {e}")));
                 mutate_call(app, |mgr| {
-                    let _ = mgr.on_failure(408);
+                    let _ = mgr.on_failure_for(leg, 408);
                 });
                 return false;
             }
         };
         if msg.is_response {
+            // Our REFER never flies pre-establishment, but a stray final
+            // REFER response must not be mistaken for the INVITE outcome.
+            if route_response(app, &msg.head) {
+                continue;
+            }
             match sip_core::wire::status_code(&msg.head) {
                 None => {
                     log::warn!("core: {}", sanitize_log("outbound: malformed status line (fail-closed)"));
                     mutate_call(app, |mgr| {
-                        let _ = mgr.on_failure(500);
+                        let _ = mgr.on_failure_for(leg, 500);
                     });
                     return false;
                 }
                 Some((code, _)) if (100..200).contains(&code) => {
                     mutate_call(app, |mgr| {
-                        let _ = mgr.on_provisional(code);
+                        let _ = mgr.on_provisional_for(leg, code);
                     });
                 }
                 Some((code, _)) if (200..300).contains(&code) => {
                     let ack = match app.try_state::<CallCoreState>() {
                         Some(calls) => match calls.mgr.lock() {
-                            Ok(mut mgr) => match mgr.on_answer(&msg.body) {
+                            // The consult (second outgoing) leg answers via
+                            // the consult path so media focus + Swapped emit
+                            // stay consistent with the sans-io manager.
+                            Ok(mut mgr) => match if leg == WhichLeg::Second {
+                                mgr.on_consult_answer(&msg.body)
+                            } else {
+                                mgr.on_answer_for(leg, &msg.body)
+                            } {
                                 Ok(ack) => {
                                     if let Some(core) = app.try_state::<Arc<CoreState>>() {
                                         emit_native_call(app, &core, &calls, &mut mgr);
@@ -1304,7 +1592,7 @@ async fn drive_establishing(stream: &mut SignallingStream, app: &AppHandle) -> b
                                         "core: {}",
                                         sanitize_log(&format!("unusable 200 OK SDP: {e}"))
                                     );
-                                    let _ = mgr.on_failure(488);
+                                    let _ = mgr.on_failure_for(leg, 488);
                                     if let Some(core) = app.try_state::<Arc<CoreState>>() {
                                         emit_native_call(app, &core, &calls, &mut mgr);
                                     }
@@ -1323,7 +1611,7 @@ async fn drive_establishing(stream: &mut SignallingStream, app: &AppHandle) -> b
                 Some((code, _)) => {
                     log::warn!("core: {}", sanitize_log(&format!("invite rejected: {code}")));
                     mutate_call(app, |mgr| {
-                        let _ = mgr.on_failure(code);
+                        let _ = mgr.on_failure_for(leg, code);
                     });
                     return false;
                 }
@@ -1334,19 +1622,25 @@ async fn drive_establishing(stream: &mut SignallingStream, app: &AppHandle) -> b
     }
 }
 
-/// Established-leg relay: queued CANCEL/BYE/re-INVITE out, peer BYE/CANCEL
-/// in, until the transport dies or the leg ends locally. Transport loss
-/// mid-call tears media down visibly (no silent zombie Active).
-async fn relay_established(stream: &mut SignallingStream, app: &AppHandle) {
+/// Established-leg relay for one dialog: queued CANCEL/BYE/re-INVITE out,
+/// peer BYE/CANCEL/REFER/NOTIFY in, until the transport dies or the leg ends
+/// locally. Transport loss fails only the driven leg (the parked leg is
+/// promoted, never orphaned) — no silent zombie Active.
+async fn relay_established_for(
+    stream: &mut SignallingStream,
+    app: &AppHandle,
+    leg: WhichLeg,
+    target: WireTarget,
+) {
     use sip_core::call::CallStateNative as S;
     let mut framer = sip_core::wire::SipFramer::new();
     loop {
-        if !flush_wire(stream, app, WireTarget::Call).await {
+        if !flush_wire(stream, app, target).await {
             break;
         }
         let state = app
             .try_state::<CallCoreState>()
-            .and_then(|c| c.mgr.lock().map(|m| m.state()).ok())
+            .and_then(|c| c.mgr.lock().map(|m| m.leg_state(leg)).ok())
             .unwrap_or(S::Idle);
         if matches!(state, S::Idle | S::Ended | S::Failed) {
             break;
@@ -1357,15 +1651,19 @@ async fn relay_established(stream: &mut SignallingStream, app: &AppHandle) {
             Ok(Err(_)) => {
                 log::warn!("core: {}", sanitize_log("call stream lost mid-call"));
                 mutate_call(app, |mgr| {
-                    if matches!(mgr.state(), S::Active | S::Held) {
-                        mgr.teardown_all(sip_core::audio::TeardownReason::Failure);
+                    if matches!(mgr.leg_state(leg), S::Active | S::Held) {
+                        let _ = mgr.on_transport_lost_for(leg);
                     }
                 });
                 break;
             }
             Ok(Ok(msg)) => {
                 if msg.is_response {
-                    continue; // 200-to-BYE/re-INVITE: leg already terminal locally
+                    // Final REFER responses drive the transfer machine;
+                    // 200-to-BYE/re-INVITE needs no action (leg already
+                    // terminal locally).
+                    route_response(app, &msg.head);
+                    continue;
                 }
                 if !handle_inbound_request(app, stream, &msg).await {
                     break;
@@ -1375,23 +1673,30 @@ async fn relay_established(stream: &mut SignallingStream, app: &AppHandle) {
     }
 }
 
-/// Driver task for one outbound call stream (single-call invariant: the
-/// previous task is aborted before a new invite).
-async fn outbound_call_task(mut stream: SignallingStream, invite_req: String, app: AppHandle) {
+/// Driver task for one outbound dialog stream: the primary INVITE
+/// (`Primary`/`Call`) or the consult INVITE (`Second`/`Consult`). The
+/// previous task for the same leg is aborted before a new one starts.
+async fn outbound_call_task(
+    mut stream: SignallingStream,
+    invite_req: String,
+    app: AppHandle,
+    leg: WhichLeg,
+    target: WireTarget,
+) {
     let answered = if sig_write_msg(&mut stream, &invite_req).await.is_ok() {
-        drive_establishing(&mut stream, &app).await
+        drive_establishing_for(&mut stream, &app, leg, target).await
     } else {
         log::warn!("core: {}", sanitize_log("outbound: INVITE write failed"));
         mutate_call(&app, |mgr| {
-            let _ = mgr.on_failure(503);
+            let _ = mgr.on_failure_for(leg, 503);
         });
         false
     };
     if answered {
-        relay_established(&mut stream, &app).await;
+        relay_established_for(&mut stream, &app, leg, target).await;
     } else {
         // Failed leg: flush a queued CANCEL so the peer never rings forever.
-        flush_wire(&mut stream, &app, WireTarget::Call).await;
+        flush_wire(&mut stream, &app, target).await;
     }
 }
 
@@ -1580,6 +1885,9 @@ pub struct CallCoreState {
     /// Live outbound call task (single-call invariant: aborted on new
     /// invite / unregister / remove).
     call_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    /// Live consult-leg task (attended-transfer consultation dialog).
+    /// Aborted on new consult / hangup of the consult leg / teardown.
+    consult_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// When the current call entered `Active` (Rust-owned timing).
     started_at: Mutex<Option<std::time::SystemTime>>,
 }
@@ -1587,10 +1895,14 @@ pub struct CallCoreState {
 /// Which connection task must send a queued SIP text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WireTarget {
-    /// Registration stream (inbound leg: 200-to-INVITE, 603, in-dialog BYE).
+    /// Registration stream (inbound legs: 200-to-INVITE, 603, in-dialog BYE,
+    /// REFER/NOTIFY for inbound transfers).
     Registration,
-    /// Outbound call stream (CANCEL, BYE, re-INVITE for the outgoing leg).
+    /// Outbound call stream (CANCEL, BYE, re-INVITE, REFER for the primary
+    /// outgoing leg).
     Call,
+    /// Consult stream (second outgoing dialog: CANCEL/BYE for consult).
+    Consult,
 }
 
 impl CallCoreState {
@@ -1599,6 +1911,7 @@ impl CallCoreState {
             mgr: Mutex::new(CallManager::new()),
             pending: Mutex::new(Vec::new()),
             call_task: Mutex::new(None),
+            consult_task: Mutex::new(None),
             started_at: Mutex::new(None),
         }
     }
@@ -1632,6 +1945,12 @@ impl CallCoreState {
 
     fn abort_call_task(&self) {
         if let Some(h) = self.call_task.lock().unwrap().take() {
+            h.abort();
+        }
+    }
+
+    fn abort_consult_task(&self) {
+        if let Some(h) = self.consult_task.lock().unwrap().take() {
             h.abort();
         }
     }
@@ -1706,6 +2025,12 @@ fn forward_call_events_last_id(app: &AppHandle, mgr: &mut CallManager) -> Option
             | sip_core::call::CallEvent::Ended { call_id, .. } => {
                 last = Some(call_id.clone());
             }
+            // Waiting/swap/transfer events carry no new dialog identity for
+            // the summary, but must still reach the webview.
+            sip_core::call::CallEvent::CallWaiting { .. }
+            | sip_core::call::CallEvent::Swapped { .. }
+            | sip_core::call::CallEvent::TransferRequested { .. }
+            | sip_core::call::CallEvent::TransferFailed { .. } => {}
             _ => {}
         }
         let _ = app.emit("daad-call-event", &ev);
@@ -1852,7 +2177,7 @@ pub fn run() {
         .manage(bridge_manager)
         .manage(Arc::new(CoreState::new()))
         .manage(CallCoreState::new())
-        .invoke_handler(tauri::generate_handler![start_sip_bridge, stop_sip_bridge, open_url, account_upsert, account_remove, register, unregister, registration_status, diagnostics_export_sanitized, call_invite, call_answer, call_reject, call_hangup, call_mute, call_hold, call_dtmf, call_audio_route, call_state, call_teardown, sip_account_upsert, sip_account_remove, sip_register, sip_unregister, sip_status, sip_call_invite, sip_call_answer, sip_call_reject, sip_call_hangup, sip_call_mute, sip_call_hold, sip_call_dtmf, sip_audio_route, sip_diagnostics_export])
+        .invoke_handler(tauri::generate_handler![start_sip_bridge, stop_sip_bridge, open_url, account_upsert, account_remove, register, unregister, registration_status, diagnostics_export_sanitized, call_invite, call_answer, call_reject, call_hangup, call_mute, call_hold, call_dtmf, call_audio_route, call_state, call_teardown, sip_account_upsert, sip_account_remove, sip_register, sip_unregister, sip_status, sip_call_invite, sip_call_answer, sip_call_answer_waiting, sip_call_reject, sip_call_hangup, sip_call_mute, sip_call_hold, sip_call_swap, sip_call_consult, sip_call_transfer_blind, sip_call_transfer_attended, sip_call_dtmf, sip_audio_route, sip_diagnostics_export])
 
         .setup(|app| {
             // Hand the webview handle to the native core so background
@@ -2035,6 +2360,7 @@ mod native_facade_tests {
                 expires_secs: 600,
                 codecs: vec![AudioCodec::Pcmu, AudioCodec::Pcma],
                 media: MediaPolicy::default(),
+                interop_opus: false,
             },
         );
         core.apply(NATIVE_ACCOUNT_ID, AccountEvent::EnableRequested);

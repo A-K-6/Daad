@@ -63,7 +63,19 @@ describe('asterisk fixture contract (static)', () => {
     const conf = read('config/pjsip.conf');
     expect(conf).toMatch(/disallow\s*=\s*all/);
     expect(conf).toMatch(/allow\s*=\s*ulaw,alaw/);
-    expect(conf).not.toMatch(/allow\s*=.*opus/i);
+    // Opus exists ONLY on the scoped interop template (1003/1004 pair).
+    // JBM endpoints (1001/1002) must never offer it.
+    const opusAllows = conf.match(/allow\s*=.*opus.*/gi) || [];
+    expect(opusAllows.length).toBeGreaterThan(0);
+    for (const line of opusAllows) {
+      expect(line).toMatch(/ulaw,alaw,opus/);
+    }
+    const jbmSection = conf.split('[daad-endpoint-opus]')[0];
+    const jbmAllows = jbmSection.match(/^allow\s*=.*$/gim) || [];
+    expect(jbmAllows.length).toBeGreaterThan(0);
+    for (const line of jbmAllows) {
+      expect(line).not.toMatch(/opus/i);
+    }
     expect(conf).not.toMatch(/allow\s*=.*g729/i);
   });
 

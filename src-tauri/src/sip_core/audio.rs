@@ -418,6 +418,113 @@ pub mod codec {
     }
 }
 
+/// Opus encode/decode for interop profiles (RFC 7587), via the maintained
+/// `audiopus` crate (safe bindings over system libopus).
+///
+/// Wire format is 48 kHz stereo; the 8 kHz G.711 pipeline resamples through
+/// [`codec::resample_linear`] at the boundary. JBM profiles never touch this
+/// module — it is constructed only when the account opts into `interop_opus`.
+pub mod opus {
+    use super::codec::resample_linear;
+
+    pub const SAMPLE_RATE: u32 = 48_000;
+    /// 20 ms frame at 48 kHz mono (telephony mapping; stereo wire uses ×2).
+    pub const FRAME_SAMPLES_MONO: usize = 960;
+
+    #[derive(Debug, thiserror::Error)]
+    pub enum OpusError {
+        #[error("opus error: {0}")]
+        Codec(String),
+    }
+
+    /// 8 kHz mono PCM → 48 kHz mono float (Opus input staging).
+    pub fn upsample_8k_to_48k(pcm_8k: &[i16]) -> Vec<f32> {
+        let norm: Vec<f32> = pcm_8k.iter().map(|&s| s as f32 / 32768.0).collect();
+        resample_linear(&norm, 8000, SAMPLE_RATE)
+    }
+
+    /// 48 kHz mono float → 8 kHz mono PCM (Opus output staging).
+    pub fn downsample_48k_to_8k(pcm_48k: &[f32]) -> Vec<i16> {
+        resample_linear(pcm_48k, SAMPLE_RATE, 8000)
+            .iter()
+            .map(|&s| (s.clamp(-1.0, 1.0) * 32767.0) as i16)
+            .collect()
+    }
+
+    /// Narrowband VoIP encoder fixed at 20 ms / 48 kHz / mono input.
+    pub struct OpusEncoder {
+        inner: audiopus::coder::Encoder,
+    }
+
+    impl OpusEncoder {
+        pub fn new_voip() -> Result<Self, OpusError> {
+            let inner = audiopus::coder::Encoder::new(
+                audiopus::SampleRate::Hz48000,
+                audiopus::Channels::Mono,
+                audiopus::Application::Voip,
+            )
+            .map_err(|e| OpusError::Codec(e.to_string()))?;
+            Ok(Self { inner })
+        }
+
+        /// Encode one 20 ms 48 kHz mono frame (exactly 960 samples).
+        pub fn encode_frame(&mut self, pcm_48k_mono: &[f32]) -> Result<Vec<u8>, OpusError> {
+            if pcm_48k_mono.len() != FRAME_SAMPLES_MONO {
+                return Err(OpusError::Codec(format!(
+                    "opus needs exactly {FRAME_SAMPLES_MONO} samples, got {}",
+                    pcm_48k_mono.len()
+                )));
+            }
+            let mut out = vec![0u8; 4000];
+            let n = self
+                .inner
+                .encode_float(pcm_48k_mono, &mut out)
+                .map_err(|e| OpusError::Codec(e.to_string()))?;
+            out.truncate(n);
+            Ok(out)
+        }
+    }
+
+    /// Matching 48 kHz mono decoder.
+    pub struct OpusDecoder {
+        inner: audiopus::coder::Decoder,
+    }
+
+    impl OpusDecoder {
+        pub fn new() -> Result<Self, OpusError> {
+            let inner = audiopus::coder::Decoder::new(
+                audiopus::SampleRate::Hz48000,
+                audiopus::Channels::Mono,
+            )
+            .map_err(|e| OpusError::Codec(e.to_string()))?;
+            Ok(Self { inner })
+        }
+
+        /// Decode one packet into 20 ms of 48 kHz mono PCM.
+        pub fn decode_packet(&mut self, packet: &[u8]) -> Result<Vec<f32>, OpusError> {
+            let mut out = vec![0f32; FRAME_SAMPLES_MONO * 2];
+            let n = self
+                .inner
+                .decode_float(Some(packet), &mut out, false)
+                .map_err(|e| OpusError::Codec(e.to_string()))?;
+            out.truncate(n);
+            Ok(out)
+        }
+    }
+
+    impl std::fmt::Debug for OpusEncoder {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("OpusEncoder").finish_non_exhaustive()
+        }
+    }
+
+    impl std::fmt::Debug for OpusDecoder {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("OpusDecoder").finish_non_exhaustive()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::codec::*;
@@ -497,5 +604,41 @@ mod tests {
         let out = resample_linear(&input, 8000, 48000);
         assert_eq!(out.len(), 12);
         assert_eq!(out[0], 0.0);
+    }
+
+    #[test]
+    fn opus_staging_resamples_8k_48k_roundtrip_shape() {
+        use super::opus::*;
+        // 20 ms at 8 kHz → 960 samples at 48 kHz → back to 160.
+        let pcm8: Vec<i16> = (0..160).map(|i| ((i * 173 - 8000) as i16)).collect();
+        let up = upsample_8k_to_48k(&pcm8);
+        assert_eq!(up.len(), FRAME_SAMPLES_MONO);
+        let down = downsample_48k_to_8k(&up);
+        assert_eq!(down.len(), 160);
+        let err: i32 = pcm8
+            .iter()
+            .zip(&down)
+            .map(|(a, b)| (*a as i32 - *b as i32).abs())
+            .max()
+            .unwrap();
+        assert!(err < 2000, "resample staging error {err}");
+    }
+
+    #[test]
+    fn opus_encode_decode_roundtrip() {
+        use super::opus::*;
+        let mut enc = OpusEncoder::new_voip().expect("libopus encoder");
+        let mut dec = OpusDecoder::new().expect("libopus decoder");
+        // 440 Hz tone at 48 kHz mono, one 20 ms frame.
+        let frame: Vec<f32> = (0..FRAME_SAMPLES_MONO)
+            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 48_000.0).sin() * 0.5)
+            .collect();
+        let packet = enc.encode_frame(&frame).expect("encode");
+        assert!(!packet.is_empty());
+        assert!(packet.len() < FRAME_SAMPLES_MONO * 4);
+        let back = dec.decode_packet(&packet).expect("decode");
+        assert_eq!(back.len(), FRAME_SAMPLES_MONO);
+        // Wrong frame size fails closed, never silently padded.
+        assert!(enc.encode_frame(&frame[..100]).is_err());
     }
 }

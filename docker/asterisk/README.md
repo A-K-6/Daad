@@ -11,12 +11,13 @@ credentials or captures live in this repo — ever.
 | Fallback | TCP/UDP `5060` |
 | Media security | `media_encryption=sdes` (mandatory SDES-SRTP) |
 | Codecs | `disallow=all` + `allow=ulaw,alaw` (PCMU/PCMA only) |
+| Interop pair | `1003`/`1004` on `daad-endpoint-opus` (`allow=ulaw,alaw,opus`, G.711 first, SDES still mandatory) |
 | DTMF | `dtmf_mode=rfc4733` |
 | RTP range | `10000–10199` (`rtp.conf`, `strictrtp=yes`) |
 | NAT/VPN recovery | `rtp_symmetric=yes`, `rewrite_contact=yes`, `force_rport=yes`, `direct_media=no` |
 | Single contact | `max_contacts=1`, `remove_existing=yes` per AOR |
 | Registration expiry | default 600s, min 60s, max 3600s |
-| Dial plan | `1001 ↔ 1002`, echo `600`, probe `699`, catch-all reject |
+| Dial plan | `1001 ↔ 1002`, interop `1003 ↔ 1004`, echo `600`, probe `699`, catch-all reject |
 
 ## Bring-up (local only)
 

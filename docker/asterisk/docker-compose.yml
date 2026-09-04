@@ -19,8 +19,10 @@ services:
       # Fill from a local .env (gitignored). Placeholders only in repo.
       - DAAD_TEST_PASSWORD_1001=${DAAD_TEST_PASSWORD_1001:-changeme-1001}
       - DAAD_TEST_PASSWORD_1002=${DAAD_TEST_PASSWORD_1002:-changeme-1002}
+      - DAAD_TEST_PASSWORD_1003=${DAAD_TEST_PASSWORD_1003:-changeme-1003}
+      - DAAD_TEST_PASSWORD_1004=${DAAD_TEST_PASSWORD_1004:-changeme-1004}
     command: >
-      sh -c "envsubst '$$DAAD_TEST_PASSWORD_1001 $$DAAD_TEST_PASSWORD_1002'
+      sh -c "envsubst '$$DAAD_TEST_PASSWORD_1001 $$DAAD_TEST_PASSWORD_1002 $$DAAD_TEST_PASSWORD_1003 $$DAAD_TEST_PASSWORD_1004'
       < /etc/asterisk/pjsip.conf > /tmp/pjsip.conf &&
       cp /tmp/pjsip.conf /etc/asterisk/pjsip.conf &&
       exec asterisk -f -vvv"

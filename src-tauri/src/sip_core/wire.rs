@@ -234,6 +234,8 @@ pub fn minimal_response(code: u16, reason: &str, head: &str) -> String {
 ///
 /// Returns the response text to send (`None` for ACK, which is absorbed).
 /// Unknown methods yield `None` except OPTIONS (stateless 200).
+/// REFER (transfer) and NOTIFY (transfer progress) are routed with
+/// Call-ID correlation across the at-most-two dialogs.
 pub fn dispatch_request(
     mgr: &mut CallManager,
     head: &str,
@@ -250,17 +252,69 @@ pub fn dispatch_request(
             let from = from_user(head).unwrap_or_else(|| "unknown".into());
             Some(mgr.on_invite_received(&cid, cseq, &branch, &from, body))
         }
-        Some("CANCEL") => match mgr.on_cancel() {
-            Ok(()) => Some(minimal_response(200, "OK", head)),
-            Err(_) => Some(minimal_response(481, "Call/Transaction Does Not Exist", head)),
-        },
-        Some("BYE") => match mgr.on_bye() {
-            Ok(()) => Some(minimal_response(200, "OK", head)),
-            Err(_) => Some(minimal_response(481, "Call/Transaction Does Not Exist", head)),
-        },
+        Some("CANCEL") => {
+            // Correlate by Call-ID when present (two dialogs); fall back to
+            // the foreground leg for header-poor retransmits.
+            let res = match call_id(head) {
+                Some(cid) if !cid.is_empty() => mgr.on_cancel_for(&cid),
+                _ => mgr.on_cancel(),
+            };
+            match res {
+                Ok(()) => Some(minimal_response(200, "OK", head)),
+                Err(_) => Some(minimal_response(481, "Call/Transaction Does Not Exist", head)),
+            }
+        }
+        Some("BYE") => {
+            let res = match call_id(head) {
+                Some(cid) if !cid.is_empty() => mgr.on_bye_for(&cid),
+                _ => mgr.on_bye(),
+            };
+            match res {
+                Ok(()) => Some(minimal_response(200, "OK", head)),
+                Err(_) => Some(minimal_response(481, "Call/Transaction Does Not Exist", head)),
+            }
+        }
+        Some("REFER") => {
+            let cid = call_id(head).unwrap_or_default();
+            let refer_to = header_value(head, "refer-to").unwrap_or_default();
+            if refer_to.trim().is_empty() {
+                return Some(minimal_response(400, "Bad Request", head));
+            }
+            Some(mgr.on_refer_received(&cid, refer_to.trim_matches(|c| c == '<' || c == '>')))
+        }
+        Some("NOTIFY") => {
+            // Transfer-progress NOTIFY (message/sipfrag body): feed the
+            // sipfrag to the transfer state machine, ack 200 when it belongs
+            // to an in-flight transfer, 481 otherwise (never absorbed blind).
+            match mgr.on_transfer_notify(body) {
+                Ok(_) => Some(minimal_response(200, "OK", head)),
+                Err(_) => Some(minimal_response(481, "Call/Transaction Does Not Exist", head)),
+            }
+        }
         Some("ACK") => None,
         Some("OPTIONS") => Some(minimal_response(200, "OK", head)),
         _ => None,
+    }
+}
+
+/// Route one inbound *response* through the call manager. Handles final
+/// responses to our REFER (202 arms the transfer, 3xx–6xx fails it).
+/// Returns `true` when the response was consumed (caller: skip default
+/// handling); `false` for unrelated responses.
+pub fn dispatch_response(mgr: &mut CallManager, head: &str) -> bool {
+    let (code, _) = match status_code(head) {
+        Some(v) => v,
+        None => return false,
+    };
+    if code < 200 {
+        return false; // provisional to REFER (100 Trying): keep waiting
+    }
+    match cseq_parts(head) {
+        Some((_, method)) if method.eq_ignore_ascii_case("REFER") => {
+            let _ = mgr.on_refer_accepted(code);
+            true
+        }
+        _ => false,
     }
 }
 
@@ -608,5 +662,126 @@ mod tests {
         assert!(!msg.is_response);
         assert_eq!(msg.body, SECURE_SDP);
         assert_eq!(call_id(&msg.head).as_deref(), Some("wire-split-1"));
+    }
+
+    // -- Call power: REFER / NOTIFY / Call-ID-routed BYE over the wire ----
+
+    fn refer_head(call_id: &str, cseq: u32, refer_to: &str) -> String {
+        format!(
+            "REFER sip:2001@pbx SIP/2.0\r\n\
+              Via: SIP/2.0/TLS pbx;branch=z9hG4bKrf01\r\n\
+              From: <sip:1000@pbx>;tag=aaa\r\n\
+              To: <sip:2001@pbx>;tag=bbb\r\n\
+              Call-ID: {call_id}\r\n\
+              CSeq: {cseq} REFER\r\n\
+              Refer-To: <{refer_to}>\r\n\
+              Referred-By: <sip:1000@pbx>\r\n\
+              Content-Length: 0\r\n\
+              \r\n"
+        )
+    }
+
+    fn active_incoming(mgr: &mut CallManager, cid: &str, branch: &str, from: &str) {
+        let head = invite_head(cid, 1, branch, from);
+        let r = dispatch_request(mgr, &head, SECURE_SDP).unwrap();
+        assert!(r.contains("180"), "{r}");
+        mgr.answer().unwrap();
+        mgr.take_events();
+    }
+
+    #[test]
+    fn refer_dispatch_accepts_and_notify_completes_over_wire_texts() {
+        use crate::sip_core::call::CallEvent;
+        let mut mgr = CallManager::with_audio(true);
+        active_incoming(&mut mgr, "wire-xfer-1", "z9hG4bKx101", "1000");
+        // Duplex fake transfer: our REFER text goes out (manager-built).
+        let refer = mgr
+            .blind_transfer_request(
+                "2002",
+                "sip:2001@pbx.example.com",
+                "sip:2002@pbx.example.com",
+            )
+            .unwrap();
+        assert!(refer.starts_with("REFER"));
+        // Fake PBX 202 to our REFER routes through dispatch_response.
+        let resp_202 = "SIP/2.0 202 Accepted\r\nCSeq: 2 REFER\r\nContent-Length: 0\r\n\r\n";
+        assert!(dispatch_response(&mut mgr, resp_202));
+        // Fake PBX NOTIFY sipfrag 180 then 200 over the wire.
+        for (body, expect_200, done) in [
+            ("SIP/2.0 180 Ringing\r\n\r\n", true, false),
+            ("SIP/2.0 200 OK\r\n\r\n", true, true),
+        ] {
+            let head = format!(
+                "NOTIFY sip:2001@pbx SIP/2.0\r\nCall-ID: wire-xfer-1\r\nCSeq: 1 NOTIFY\r\nContent-Length: {}\r\n\r\n",
+                body.len()
+            );
+            let r = dispatch_request(&mut mgr, &head, body).unwrap();
+            assert!(r.contains("200") == expect_200, "{r}");
+            assert_eq!(mgr.media_released(), done, "leg retires only on final sipfrag");
+        }
+        assert_eq!(mgr.state(), crate::sip_core::call::CallStateNative::Idle);
+        assert!(mgr.take_events().iter().any(|e| matches!(
+            e,
+            CallEvent::Ended { reason, .. } if reason == "transferred"
+        )));
+    }
+
+    #[test]
+    fn refer_response_failure_and_stray_notify_are_safe() {
+        let mut mgr = CallManager::with_audio(true);
+        active_incoming(&mut mgr, "wire-xfer-2", "z9hG4bKx202", "1000");
+        mgr.blind_transfer_request("2002", "sip:2001@pbx", "sip:2002@pbx.example.com").unwrap();
+        // 603 to REFER: transfer fails, leg stays up.
+        let resp = "SIP/2.0 603 Decline\r\nCSeq: 2 REFER\r\nContent-Length: 0\r\n\r\n";
+        assert!(dispatch_response(&mut mgr, resp));
+        assert_eq!(mgr.state(), crate::sip_core::call::CallStateNative::Active);
+        // Stray NOTIFY with no transfer in flight: 481, never absorbed.
+        let head = "NOTIFY sip:2001@pbx SIP/2.0\r\nCall-ID: wire-xfer-2\r\nCSeq: 1 NOTIFY\r\nContent-Length: 11\r\n\r\n";
+        let r = dispatch_request(&mut mgr, head, "SIP/2.0 200 OK").unwrap();
+        assert!(r.contains("481"), "{r}");
+        // Unrelated responses are not consumed.
+        assert!(!dispatch_response(&mut mgr, "SIP/2.0 200 OK\r\nCSeq: 1 BYE\r\n\r\n"));
+        assert!(!dispatch_response(&mut mgr, "SIP/2.0 100 Trying\r\nCSeq: 2 REFER\r\n\r\n"));
+    }
+
+    #[test]
+    fn inbound_refer_over_wire_yields_202_and_event() {
+        use crate::sip_core::call::CallEvent;
+        let mut mgr = CallManager::with_audio(true);
+        active_incoming(&mut mgr, "wire-refin-1", "z9hG4bKri01", "1000");
+        let head = refer_head("wire-refin-1", 2, "sip:2002@pbx.example.com");
+        let r = dispatch_request(&mut mgr, &head, "").unwrap();
+        assert!(r.contains("202"), "{r}");
+        assert!(mgr.take_events().iter().any(|e| matches!(
+            e,
+            CallEvent::TransferRequested { .. }
+        )));
+        // REFER without Refer-To: 400, never a phantom transfer.
+        let bad = "REFER sip:x SIP/2.0\r\nCall-ID: wire-refin-1\r\nCSeq: 3 REFER\r\nContent-Length: 0\r\n\r\n";
+        let r = dispatch_request(&mut mgr, bad, "").unwrap();
+        assert!(r.contains("400"), "{r}");
+    }
+
+    #[test]
+    fn bye_cancel_routed_by_call_id_with_two_dialogs() {
+        let mut mgr = CallManager::with_audio(true);
+        active_incoming(&mut mgr, "wire-2leg-a", "z9hG4bK2a01", "1000");
+        // Second incoming parks as waiting (no auto-answer).
+        let head_b = invite_head("wire-2leg-b", 1, "z9hG4bK2b01", "1001");
+        let r = dispatch_request(&mut mgr, &head_b, SECURE_SDP).unwrap();
+        assert!(r.contains("180"), "{r}");
+        // CANCEL for the waiting leg (caller gave up): missed, primary stays.
+        let cancel = "CANCEL sip:2001@pbx SIP/2.0\r\nCall-ID: wire-2leg-b\r\nCSeq: 1 CANCEL\r\nContent-Length: 0\r\n\r\n";
+        let r = dispatch_request(&mut mgr, cancel, "").unwrap();
+        assert!(r.contains("200"), "{r}");
+        assert_eq!(mgr.state(), crate::sip_core::call::CallStateNative::Active);
+        // BYE for the primary ends everything (zero orphans).
+        let bye = "BYE sip:x SIP/2.0\r\nCall-ID: wire-2leg-a\r\nCSeq: 2 BYE\r\nContent-Length: 0\r\n\r\n";
+        let r = dispatch_request(&mut mgr, bye, "").unwrap();
+        assert!(r.contains("200"), "{r}");
+        assert!(mgr.media_released());
+        // Late BYE for either dialog: 481, never resurrected.
+        let r = dispatch_request(&mut mgr, bye, "").unwrap();
+        assert!(r.contains("481"), "{r}");
     }
 }

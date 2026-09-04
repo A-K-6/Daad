@@ -52,6 +52,7 @@ pub enum TerminationReason {
     Missed,
     Failed(u16),
     Replaced,
+    Transferred,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -329,6 +330,14 @@ impl SipDialog {
         Ok(())
     }
 
+    /// Transfer completed (final 2xx NOTIFY sipfrag on our REFER): the leg
+    /// retires as transferred; the peer owns the new dialog from here.
+    pub fn note_transferred(&mut self) {
+        if matches!(self.state, DialogState::Active | DialogState::Held) {
+            self.state = DialogState::Terminated(TerminationReason::Transferred);
+        }
+    }
+
     pub fn is_terminal(&self) -> bool {
         matches!(
             self.state,
@@ -407,6 +416,140 @@ impl SipDialog {
         self.cseq += 1;
         self.build_invite_request(from_uri, to_ext, sdp)
     }
+
+    /// In-dialog REFER for call transfer (RFC 3515). `refer_to` is the
+    /// transfer target (`sip:<ext>` short form accepted), `referred_by` is
+    /// the local AoR, and `replaces` carries the consult dialog for
+    /// attended transfer (RFC 3891). CSeq is bumped like a re-INVITE.
+    pub fn build_refer(
+        &mut self,
+        refer_to: &str,
+        referred_by: &str,
+        replaces: Option<&Replaces>,
+    ) -> String {
+        self.cseq += 1;
+        let mut req = format!(
+            "REFER sip:peer SIP/2.0\r\n\
+             Call-ID: {cid}\r\n\
+             CSeq: {cseq} REFER\r\n\
+             Refer-To: <{to}>\r\n\
+             Referred-By: <{by}>\r\n",
+            cid = self.call_id,
+            cseq = self.cseq,
+            to = refer_to,
+            by = referred_by,
+        );
+        if let Some(r) = replaces {
+            req.push_str(&format!("Replaces: {}\r\n", r.encode()));
+        }
+        req.push_str("Content-Length: 0\r\n\r\n");
+        req
+    }
+
+    /// Dialog identifiers for the consult leg in an attended-transfer
+    /// `Replaces` header (RFC 3891 §3): `call-id;from-tag=..;to-tag=..`.
+    /// Percent-escapes `;`/`?` inside values so parsing round-trips.
+    pub fn replaces_for(&self, from_tag: &str, to_tag: &str) -> Replaces {
+        Replaces {
+            call_id: self.call_id.clone(),
+            from_tag: from_tag.to_string(),
+            to_tag: to_tag.to_string(),
+        }
+    }
+}
+
+/// RFC 3891 `Replaces` header value (attended transfer join).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Replaces {
+    pub call_id: String,
+    pub from_tag: String,
+    pub to_tag: String,
+}
+
+impl Replaces {
+    fn escape(s: &str) -> String {
+        s.replace('%', "%25").replace(';', "%3B").replace('?', "%3F")
+    }
+
+    fn unescape(s: &str) -> String {
+        s.replace("%3B", ";")
+            .replace("%3b", ";")
+            .replace("%3F", "?")
+            .replace("%3f", "?")
+            .replace("%25", "%")
+    }
+
+    pub fn encode(&self) -> String {
+        format!(
+            "{};from-tag={};to-tag={}",
+            Self::escape(&self.call_id),
+            Self::escape(&self.from_tag),
+            Self::escape(&self.to_tag),
+        )
+    }
+
+    /// Parse a `Replaces` value; `None` on malformed input (fail-closed —
+    /// the transfer is aborted, never attempted with half identifiers).
+    pub fn parse(raw: &str) -> Option<Self> {
+        let raw = raw.trim();
+        let (call_id, params) = raw.split_once(';')?;
+        let call_id = call_id.trim();
+        if call_id.is_empty() {
+            return None;
+        }
+        let mut from_tag = None;
+        let mut to_tag = None;
+        for p in params.split(';') {
+            let (k, v) = p.split_once('=')?;
+            match k.trim().to_ascii_lowercase().as_str() {
+                "from-tag" => from_tag = Some(Self::unescape(v.trim())),
+                "to-tag" => to_tag = Some(Self::unescape(v.trim())),
+                _ => {}
+            }
+        }
+        Some(Self {
+            call_id: call_id.to_string(),
+            from_tag: from_tag.filter(|s| !s.is_empty())?,
+            to_tag: to_tag.filter(|s| !s.is_empty())?,
+        })
+    }
+}
+
+/// Outcome of a transfer-progress NOTIFY with a `message/sipfrag` body
+/// (RFC 3515 §2.4.2): the status line of the transfer-target dialog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransferProgress {
+    /// Provisional at the target (e.g. 100 Trying, 180 Ringing): keep waiting.
+    Trying(u16),
+    /// Final success (2xx): the target answered, our legs may retire.
+    Completed(u16),
+    /// Final failure (3xx–6xx): the transfer failed, our leg stays up.
+    Failed(u16),
+}
+
+/// Parse the first `SIP/2.0 <code>` line of a NOTIFY sipfrag body.
+/// `None` when absent (fail-closed: treated as no progress, never success).
+pub fn parse_transfer_notify(body: &str) -> Option<TransferProgress> {
+    for line in body.lines() {
+        let t = line.trim();
+        if let Some(rest) = t
+            .strip_prefix("SIP/2.0")
+            .or_else(|| t.strip_prefix("SIP/2.0 "))
+        {
+            let rest = rest.trim();
+            if let Ok(code) = rest.split_whitespace().next().unwrap_or("").parse::<u16>() {
+                if (100..200).contains(&code) {
+                    return Some(TransferProgress::Trying(code));
+                } else if (200..300).contains(&code) {
+                    return Some(TransferProgress::Completed(code));
+                } else if code >= 300 {
+                    return Some(TransferProgress::Failed(code));
+                }
+            }
+            return None;
+        }
+    }
+    None
 }
 
 fn branch_for(call_id: &str, cseq: u32) -> String {
@@ -539,5 +682,69 @@ mod tests {
         assert!(re.starts_with("INVITE sip:2001"));
         assert!(re.contains("CSeq: 2 INVITE"));
         assert_ne!(first, re, "re-INVITE must not look like a retransmission");
+    }
+
+    #[test]
+    fn refer_carries_referred_by_and_bumps_cseq() {
+        let mut d = SipDialog::new_outgoing("refer-1".into());
+        d.note_provisional(100).unwrap();
+        d.note_success().unwrap();
+        let refer = d.build_refer("sip:2002@pbx", "sip:1000@pbx", None);
+        assert!(refer.starts_with("REFER"), "{refer}");
+        assert!(refer.contains("Call-ID: refer-1"), "{refer}");
+        assert!(refer.contains("CSeq: 2 REFER"), "{refer}");
+        assert!(refer.contains("Refer-To: <sip:2002@pbx>"), "{refer}");
+        assert!(refer.contains("Referred-By: <sip:1000@pbx>"), "{refer}");
+        assert!(!refer.contains("Replaces:"), "{refer}");
+    }
+
+    #[test]
+    fn refer_with_replaces_for_attended() {
+        let consult = SipDialog::new_outgoing("consult-9".into());
+        let replaces = consult.replaces_for("aaa111", "bbb222");
+        let mut d = SipDialog::new_outgoing("primary-1".into());
+        d.note_success().unwrap();
+        let refer = d.build_refer("sip:2002@pbx", "sip:1000@pbx", Some(&replaces));
+        assert!(refer.contains("Replaces: consult-9;from-tag=aaa111;to-tag=bbb222"), "{refer}");
+        // Round-trip through the parser (what the PBX / target sees).
+        let value = refer
+            .lines()
+            .find_map(|l| l.strip_prefix("Replaces:"))
+            .unwrap()
+            .trim();
+        assert_eq!(Replaces::parse(value), Some(replaces));
+    }
+
+    #[test]
+    fn replaces_parse_fails_closed() {
+        assert!(Replaces::parse("").is_none());
+        assert!(Replaces::parse("no-params-here").is_none());
+        assert!(Replaces::parse("cid;from-tag=;to-tag=x").is_none());
+        assert!(Replaces::parse("cid;from-tag=x").is_none());
+        let r = Replaces::parse("cid-1;from-tag=a%3Bb;to-tag=c").unwrap();
+        assert_eq!(r.from_tag, "a;b");
+        assert_eq!(r.call_id, "cid-1");
+    }
+
+    #[test]
+    fn transfer_notify_status_lines() {
+        assert_eq!(
+            parse_transfer_notify("SIP/2.0 100 Trying\r\n\r\n"),
+            Some(TransferProgress::Trying(100))
+        );
+        assert_eq!(
+            parse_transfer_notify("SIP/2.0 180 Ringing\r\n\r\n"),
+            Some(TransferProgress::Trying(180))
+        );
+        assert_eq!(
+            parse_transfer_notify("SIP/2.0 200 OK\r\n\r\n"),
+            Some(TransferProgress::Completed(200))
+        );
+        assert_eq!(
+            parse_transfer_notify("SIP/2.0 603 Decline\r\n\r\n"),
+            Some(TransferProgress::Failed(603))
+        );
+        assert_eq!(parse_transfer_notify(""), None);
+        assert_eq!(parse_transfer_notify("garbage"), None);
     }
 }

@@ -30,8 +30,8 @@ pub mod tls;
 pub mod transport;
 pub mod wire;
 
-pub use call::{CallDirection, CallEvent, CallManager, CallStateNative};
-pub use dialog::{DialogState, InviteDedupCache};
+pub use call::{CallDirection, CallEvent, CallManager, CallStateNative, WhichLeg};
+pub use dialog::{DialogState, InviteDedupCache, TransferProgress};
 pub use sdp::{MediaDirection, RtpCodec};
 
 #[derive(Debug, thiserror::Error)]

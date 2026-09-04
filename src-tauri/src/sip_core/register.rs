@@ -612,6 +612,7 @@ mod tests {
             expires_secs: 600,
             codecs: vec![AudioCodec::Pcmu, AudioCodec::Pcma],
             media: MediaPolicy::default(),
+            interop_opus: false,
         }
     }
 

@@ -50,11 +50,14 @@ impl SipTransport {
     }
 }
 
-/// Audio codec in JBM offer order. PCMU MUST come before PCMA.
+/// Audio codec in offer order. JBM canonical order is PCMU first, then
+/// PCMA. Opus is allowed only as a trailing interop codec (see
+/// [`SipProfile::interop_opus`); it is never part of the JBM profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AudioCodec {
     Pcmu,
     Pcma,
+    Opus,
 }
 
 impl AudioCodec {
@@ -62,6 +65,7 @@ impl AudioCodec {
         match self {
             Self::Pcmu => 0,
             Self::Pcma => 8,
+            Self::Opus => crate::sip_core::sdp::OPUS_DYNAMIC_PT,
         }
     }
 
@@ -69,6 +73,7 @@ impl AudioCodec {
         match self {
             Self::Pcmu => "PCMU",
             Self::Pcma => "PCMA",
+            Self::Opus => "opus",
         }
     }
 }
@@ -120,9 +125,16 @@ pub struct SipProfile {
     pub ca_pem: Option<String>,
     /// Registration expiry requested from the registrar (seconds).
     pub expires_secs: u32,
-    /// Codec offer order. MUST be [Pcmu, Pcma] per JBM profile.
+    /// Codec offer order. JBM MUST be exactly [Pcmu, Pcma]; interop
+    /// profiles with `interop_opus` set MUST be exactly [Pcmu, Pcma, Opus]
+    /// (Opus trailing, never first — G.711 stays preferred).
     pub codecs: Vec<AudioCodec>,
     pub media: MediaPolicy,
+    /// Interop gate for Opus: `false` (default) is the closed JBM profile.
+    /// `true` allows the trailing-Opus codec order above for lab interop
+    /// extensions only. Never weakens SRTP (still mandatory).
+    #[serde(default)]
+    pub interop_opus: bool,
 }
 
 impl SipProfile {
@@ -145,7 +157,14 @@ impl SipProfile {
                 self.expires_secs
             ));
         }
-        if self.codecs != [AudioCodec::Pcmu, AudioCodec::Pcma] {
+        if self.interop_opus {
+            if self.codecs != [AudioCodec::Pcmu, AudioCodec::Pcma, AudioCodec::Opus] {
+                return Err(
+                    "interop codec offer order must be exactly [PCMU, PCMA, Opus] (Opus trailing)"
+                        .into(),
+                );
+            }
+        } else if self.codecs != [AudioCodec::Pcmu, AudioCodec::Pcma] {
             return Err("codec offer order must be exactly [PCMU, PCMA] (JBM profile)".into());
         }
         if !self.media.srtp_required {
@@ -274,6 +293,7 @@ mod tests {
             expires_secs: 600,
             codecs: vec![AudioCodec::Pcmu, AudioCodec::Pcma],
             media: MediaPolicy::default(),
+            interop_opus: false,
         }
     }
 
@@ -363,6 +383,28 @@ mod tests {
         p.codecs = vec![AudioCodec::Pcma, AudioCodec::Pcmu];
         assert!(p.validate().is_err());
         p.codecs = vec![AudioCodec::Pcmu];
+        assert!(p.validate().is_err());
+        // Opus without the interop gate is rejected on the JBM profile.
+        p.codecs = vec![AudioCodec::Pcmu, AudioCodec::Pcma, AudioCodec::Opus];
+        assert!(p.validate().is_err());
+    }
+
+    #[test]
+    fn interop_opus_order_is_pcmu_pcma_then_opus() {
+        let mut p = valid_profile();
+        p.interop_opus = true;
+        // Gate on but order unchanged → rejected (must opt the codecs in too).
+        assert!(p.validate().is_err());
+        p.codecs = vec![AudioCodec::Pcmu, AudioCodec::Pcma, AudioCodec::Opus];
+        assert!(p.validate().is_ok());
+        // Opus first or alone is never valid — G.711 stays preferred.
+        p.codecs = vec![AudioCodec::Opus, AudioCodec::Pcmu, AudioCodec::Pcma];
+        assert!(p.validate().is_err());
+        p.codecs = vec![AudioCodec::Opus];
+        assert!(p.validate().is_err());
+        // The gate never weakens SRTP.
+        p.codecs = vec![AudioCodec::Pcmu, AudioCodec::Pcma, AudioCodec::Opus];
+        p.media.srtp_required = false;
         assert!(p.validate().is_err());
     }
 

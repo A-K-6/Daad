@@ -38,6 +38,7 @@ rand = "0.8"
 base64 = "0.22"
 thiserror = "1"
 ezk-g711 = "0.2.0"
+audiopus = "0.2"
 bytes = "1"
 webrtc-util = "0.17"
 
