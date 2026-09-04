@@ -315,3 +315,72 @@ describe('sanitizeDiagnostics', () => {
     expect(s).toContain('Sanitized');
   });
 });
+
+describe('NativeSipClient call power (transfer / consult / swap / waiting)', () => {
+  function makeClient() {
+    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+    const handlers = new Map<string, (payload: unknown) => void>();
+    const client = new NativeSipClient({
+      invokeFn: async (cmd, args) => {
+        calls.push({ cmd, args });
+        return undefined;
+      },
+      listenFn: (event, handler) => {
+        handlers.set(event, handler as (payload: unknown) => void);
+        return Promise.resolve(() => {
+          handlers.delete(event);
+        });
+      },
+    });
+    return { client, calls, handlers };
+  }
+
+  it('serializes the five call-power commands with exact Rust names/keys', async () => {
+    const { client, calls } = makeClient();
+    await client.transferBlind('1002');
+    await client.consult('1003');
+    await client.transferAttended();
+    await client.swap();
+    await client.answerWaiting();
+    expect(calls).toContainEqual({ cmd: 'sip_call_transfer_blind', args: { target: '1002' } });
+    expect(calls).toContainEqual({ cmd: 'sip_call_consult', args: { target: '1003' } });
+    expect(calls).toContainEqual({ cmd: 'sip_call_transfer_attended', args: undefined });
+    expect(calls).toContainEqual({ cmd: 'sip_call_swap', args: undefined });
+    expect(calls).toContainEqual({ cmd: 'sip_call_answer_waiting', args: undefined });
+  });
+
+  it('blocks invalid transfer/consult targets before IPC', async () => {
+    const { client, calls } = makeClient();
+    for (const bad of ['', '01', '12', '123456789', '12a', 'sip:1002@pbx']) {
+      await expect(client.transferBlind(bad)).rejects.toThrow();
+      await expect(client.consult(bad)).rejects.toThrow();
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it('trims valid targets and never sends secrets', async () => {
+    const { client, calls } = makeClient();
+    await client.transferBlind(' 1002 ');
+    expect(calls[0]).toEqual({ cmd: 'sip_call_transfer_blind', args: { target: '1002' } });
+    const logged = JSON.stringify([
+      sanitizeForLog('sip_call_transfer_blind', calls[0].args),
+      sanitizeForLog('sip_call_consult', { target: '1002', password: 'pw' }),
+    ]);
+    expect(logged).not.toContain('pw');
+    expect(logged).toContain('1002');
+  });
+
+  it('subscribes to daad-call-event and forwards typed payloads', async () => {
+    const { client, handlers } = makeClient();
+    const seen: unknown[] = [];
+    const unsub = await client.onCallEvent((e) => {
+      seen.push(e);
+    });
+    expect(handlers.has('daad-call-event')).toBe(true);
+    handlers.get('daad-call-event')?.({ type: 'call_waiting', from: '1003', call_id: 'abc' });
+    handlers.get('daad-call-event')?.({ type: 'transfer_failed', call_id: 'abc', code: 603 });
+    expect(seen).toHaveLength(2);
+    unsub();
+    expect(handlers.has('daad-call-event')).toBe(false);
+  });
+});

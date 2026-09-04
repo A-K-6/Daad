@@ -54,6 +54,15 @@ const MainSoftphone: React.FC = () => {
     toggleHold,
     sendDTMF,
     setAudioRoute,
+    waitingCall,
+    consultTarget,
+    hasSecondLeg,
+    transferError,
+    transferBlind,
+    consult,
+    transferAttended,
+    swapCalls,
+    answerWaiting,
     exportDiagnostics,
     clearCallHistory,
   } = useSip();
@@ -147,11 +156,21 @@ const MainSoftphone: React.FC = () => {
                 callState={callState}
                 callInfo={callInfo}
                 audioRoute={audioRoute}
+                waitingCall={waitingCall}
+                hasSecondLeg={hasSecondLeg}
+                consultTarget={consultTarget}
+                transferError={transferError}
                 onHangup={hangup}
                 onToggleMute={toggleMute}
                 onToggleHold={toggleHold}
                 onSendDtmf={sendDTMF}
                 onAudioRoute={setAudioRoute}
+                onTransferBlind={transferBlind}
+                onConsult={consult}
+                onTransferAttended={transferAttended}
+                onSwap={swapCalls}
+                onAnswerWaiting={answerWaiting}
+                onDeclineWaiting={rejectCall}
               />
             ) : (
               <div className="flex flex-col h-full justify-between">

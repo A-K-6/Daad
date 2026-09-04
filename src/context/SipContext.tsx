@@ -19,6 +19,9 @@ import {
   CertTrustStatus,
   AudioRoute,
   NativeSipStatus,
+  WaitingCallInfo,
+  TransferRequestedInfo,
+  NativeCallEvent,
 } from '@/types';
 import type { SanitizedDiagnostics } from '@/services/nativeSipClient';
 
@@ -97,6 +100,16 @@ interface SipContextType {
   certStatus: CertTrustStatus;
   audioRoute: AudioRoute;
   contactsReachable: number;
+  /** Parked second-leg caller (from `call_waiting`); null when none waiting. */
+  waitingCall: WaitingCallInfo | null;
+  /** Outgoing consult target dialed via `consult()`; null when no consult leg. */
+  consultTarget: string | null;
+  /** True while a second dialog is parked (waiting incoming or consult leg). */
+  hasSecondLeg: boolean;
+  /** Last transfer failure text (`transfer_failed`); cleared on Idle/retry. */
+  transferError: string | null;
+  /** Last inbound transfer request (`transfer_requested`); secret-free. */
+  transferRequested: TransferRequestedInfo | null;
   connect: (config?: SipConfig) => Promise<void>;
   disconnect: () => Promise<void>;
   login: (config: SipConfig) => Promise<void>;
@@ -109,6 +122,16 @@ interface SipContextType {
   toggleHold: () => Promise<void>;
   sendDTMF: (tone: string) => void;
   setAudioRoute: (route: AudioRoute) => Promise<void>;
+  /** Blind transfer the foreground leg to a numeric target (RFC 3515). */
+  transferBlind: (target: string) => Promise<void>;
+  /** Hold primary + dial a numeric consult target as the second dialog. */
+  consult: (target: string) => Promise<void>;
+  /** Complete the attended transfer (REFER + Replaces on the held primary). */
+  transferAttended: () => Promise<void>;
+  /** Explicit swap: hold foreground + resume parked leg. */
+  swapCalls: () => Promise<void>;
+  /** Answer the waiting leg (hold active + answer waiting). */
+  answerWaiting: () => Promise<void>;
   exportDiagnostics: () => Promise<SanitizedDiagnostics>;
   clearCallHistory: () => void;
 }
@@ -139,6 +162,11 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
   const [certStatus, setCertStatus] = useState<CertTrustStatus>('unknown');
   const [audioRoute, setAudioRouteState] = useState<AudioRoute>('system');
   const [contactsReachable, setContactsReachable] = useState<number>(0);
+  /** Call-power (two-dialog) state — secret-free, derived from native events. */
+  const [waitingCall, setWaitingCall] = useState<WaitingCallInfo | null>(null);
+  const [consultTarget, setConsultTarget] = useState<string | null>(null);
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [transferRequested, setTransferRequested] = useState<TransferRequestedInfo | null>(null);
 
   const opSeq = useRef(0);
   const subscribed = useRef(false);
@@ -181,7 +209,14 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
       setCallState(state);
       // Trust Rust event timestamps verbatim — never synthesize startTime here.
       setCallInfo(info ? { ...info } : null);
-      if (state === 'Idle') stopDisplayTick();
+      if (state === 'Idle') {
+        stopDisplayTick();
+        // Last leg gone: no waiting/consult/transfer state can survive.
+        setWaitingCall(null);
+        setConsultTarget(null);
+        setTransferError(null);
+        setTransferRequested(null);
+      }
     },
     [stopDisplayTick],
   );
@@ -193,6 +228,53 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
     setCertStatus(status.certStatus || 'unknown');
     setContactsReachable(status.contactsReachable ?? 0);
   }, []);
+
+  const clearSecondLegState = useCallback(() => {
+    setWaitingCall(null);
+    setConsultTarget(null);
+    setTransferError(null);
+    setTransferRequested(null);
+  }, []);
+
+  /**
+   * Apply raw core dialog events (`daad-call-event`). Secret-free: extensions
+   * + state only — never credentials, URIs beyond the extension, SDP, or keys.
+   */
+  const applyNativeEvent = useCallback(
+    (ev: NativeCallEvent) => {
+      if (!ev || typeof (ev as { type?: unknown }).type !== 'string') return;
+      switch (ev.type) {
+        case 'call_waiting':
+          setWaitingCall({ from: ev.from, callId: ev.call_id });
+          break;
+        case 'swapped':
+          // Waiting leg answered (or explicit swap): no longer ringing, but a
+          // second dialog stays parked — keep consult/second-leg tracking.
+          setWaitingCall(null);
+          break;
+        case 'transfer_requested':
+          setTransferRequested({ callId: ev.call_id, referTo: ev.refer_to });
+          break;
+        case 'transfer_failed':
+          setTransferError(`Transfer failed (SIP ${ev.code}) — call still connected.`);
+          break;
+        case 'ended':
+          if (ev.reason === 'transferred') clearSecondLegState();
+          else {
+            // Last-leg teardown surfaces via `sip://call-state` Idle; drop
+            // waiting state eagerly so the banner never lingers.
+            setWaitingCall(null);
+          }
+          break;
+        case 'failed':
+          setWaitingCall(null);
+          break;
+        default:
+          break;
+      }
+    },
+    [clearSecondLegState],
+  );
 
   useEffect(() => {
     if (subscribed.current) return;
@@ -223,6 +305,14 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
           if (!disposed) setCertStatus(s);
         });
         unsubs.push(u3);
+      } catch {
+        /* noop */
+      }
+      try {
+        const u4 = await native.onCallEvent((ev) => {
+          if (!disposed) applyNativeEvent(ev);
+        });
+        unsubs.push(u4);
       } catch {
         /* noop */
       }
@@ -258,7 +348,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
         displayTickRef.current = null;
       }
     };
-  }, [native, applyNativeStatus, applyNativeCall, stopDisplayTick]);
+  }, [native, applyNativeStatus, applyNativeCall, applyNativeEvent, stopDisplayTick]);
 
   // Display-only ticker: re-renders elapsed time from the Rust-owned startTime.
   // It never sets startTime and never acts as the source of truth.
@@ -368,7 +458,8 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
     setConnectionError(null);
     setCallState('Idle');
     setCallInfo(null);
-  }, [native, stopDisplayTick]);
+    clearSecondLegState();
+  }, [native, stopDisplayTick, clearSecondLegState]);
 
   const login = useCallback(
     async (newConfig: SipConfig) => {
@@ -447,6 +538,57 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
     [native],
   );
 
+  const transferBlind = useCallback(
+    async (target: string) => {
+      const v = validateDialTarget(target);
+      if (!v.ok) throw new Error(v.error || 'Invalid number');
+      setTransferError(null);
+      try {
+        await native.transferBlind(target.trim());
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setTransferError(msg);
+        throw e;
+      }
+    },
+    [native],
+  );
+
+  const consult = useCallback(
+    async (target: string) => {
+      const v = validateDialTarget(target);
+      if (!v.ok) throw new Error(v.error || 'Invalid number');
+      setTransferError(null);
+      await native.consult(target.trim());
+      // Track the outgoing second leg locally (the core confirms via events;
+      // the target itself is a validated numeric extension, never a secret).
+      setConsultTarget(target.trim());
+    },
+    [native],
+  );
+
+  const transferAttended = useCallback(async () => {
+    setTransferError(null);
+    try {
+      await native.transferAttended();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setTransferError(msg);
+      throw e;
+    }
+  }, [native]);
+
+  const swapCalls = useCallback(async () => {
+    await native.swap();
+  }, [native]);
+
+  const answerWaiting = useCallback(async () => {
+    await native.answerWaiting();
+    // The waiting leg is no longer ringing; the parked primary stays as the
+    // held second leg (confirmed via `swapped` + call-state snapshot).
+    setWaitingCall(null);
+  }, [native]);
+
   const exportDiagnostics = useCallback(async (): Promise<SanitizedDiagnostics> => {
     return native.exportDiagnostics({
       connectionState,
@@ -476,6 +618,11 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
         certStatus,
         audioRoute,
         contactsReachable,
+        waitingCall,
+        consultTarget,
+        hasSecondLeg: waitingCall !== null || consultTarget !== null,
+        transferError,
+        transferRequested,
         connect,
         disconnect,
         login,
@@ -488,6 +635,11 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
         toggleHold,
         sendDTMF,
         setAudioRoute,
+        transferBlind,
+        consult,
+        transferAttended,
+        swapCalls,
+        answerWaiting,
         exportDiagnostics,
         clearCallHistory,
       }}

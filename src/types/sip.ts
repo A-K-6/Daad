@@ -78,3 +78,31 @@ export const TERMINAL_FAILURE_STATES: ConnectionState[] = [
   'NoReachableContact',
   'RegistrationFailed',
 ];
+
+/** Second-leg waiting caller (secret-free: extension + dialog id only). */
+export interface WaitingCallInfo {
+  from: string;
+  callId: string;
+}
+
+/** Inbound transfer request surfaced from the native core (secret-free). */
+export interface TransferRequestedInfo {
+  callId: string;
+  referTo: string;
+}
+
+/**
+ * Typed `daad-call-event` payloads from the Rust core (`CallEvent`, serde
+ * `tag = "type"`, `snake_case`). Secret-free: extensions + state only.
+ */
+export type NativeCallEvent =
+  | { type: 'incoming_ringing'; from: string; call_id: string }
+  | { type: 'outgoing_ringing'; to: string; call_id: string }
+  | { type: 'active'; call_id: string }
+  | { type: 'ended'; call_id: string; reason: string }
+  | { type: 'failed'; reason: string; code?: number | null }
+  | { type: 'reconnecting'; attempt: number }
+  | { type: 'call_waiting'; from: string; call_id: string }
+  | { type: 'swapped'; active_call_id: string }
+  | { type: 'transfer_requested'; call_id: string; refer_to: string }
+  | { type: 'transfer_failed'; call_id: string; code: number };

@@ -4,6 +4,7 @@ import type {
   CallState,
   CertTrustStatus,
   ConnectionState,
+  NativeCallEvent,
   NativeSipStatus,
 } from '@/types';
 
@@ -234,6 +235,8 @@ export const NATIVE_EVENTS = {
   connection: 'sip://connection-state',
   call: 'sip://call-state',
   cert: 'sip://cert-status',
+  /** Raw core dialog events (CallWaiting, Swapped, TransferRequested/Failed). */
+  callEvent: 'daad-call-event',
 } as const;
 
 export class NativeSipClient {
@@ -335,6 +338,42 @@ export class NativeSipClient {
     await this.call('sip_call_dtmf', { tone });
   }
 
+  /**
+   * Blind transfer (RFC 3515): REFER the foreground leg to a numeric target.
+   * The target is validated pre-IPC (numeric 3–8 digits, no leading zero);
+   * invalid targets never reach the backend.
+   */
+  async transferBlind(target: string): Promise<void> {
+    const v = validateDialTarget(target);
+    if (!v.ok) throw new Error(v.error || 'Invalid transfer target');
+    await this.call('sip_call_transfer_blind', { target: target.trim() });
+  }
+
+  /**
+   * Start a consultation leg for attended transfer: holds the primary leg
+   * and dials the numeric consult target as the second dialog.
+   */
+  async consult(target: string): Promise<void> {
+    const v = validateDialTarget(target);
+    if (!v.ok) throw new Error(v.error || 'Invalid consult target');
+    await this.call('sip_call_consult', { target: target.trim() });
+  }
+
+  /** Complete an attended transfer (REFER + Replaces on the held primary). */
+  async transferAttended(): Promise<void> {
+    await this.call('sip_call_transfer_attended');
+  }
+
+  /** Explicit swap: hold foreground + resume parked leg (one RTP stream). */
+  async swap(): Promise<void> {
+    await this.call('sip_call_swap');
+  }
+
+  /** Answer the waiting second leg (hold active + answer waiting). */
+  async answerWaiting(): Promise<void> {
+    await this.call('sip_call_answer_waiting');
+  }
+
   async setAudioRoute(route: AudioRoute): Promise<void> {
     await this.call('sip_audio_route', { route });
   }
@@ -391,6 +430,23 @@ export class NativeSipClient {
   async onCertStatus(handler: (s: CertTrustStatus) => void): Promise<() => void> {
     const off = await this.listenFn(NATIVE_EVENTS.cert, (p) => {
       handler(p as CertTrustStatus);
+    });
+    const un = typeof off === 'function' ? off : () => undefined;
+    this.unlisteners.push(un);
+    return () => {
+      const i = this.unlisteners.indexOf(un);
+      if (i >= 0) this.unlisteners.splice(i, 1);
+      un();
+    };
+  }
+
+  /**
+   * Subscribe to raw core dialog events (`daad-call-event`): `call_waiting`,
+   * `swapped`, `transfer_requested`, `transfer_failed` (secret-free).
+   */
+  async onCallEvent(handler: (e: NativeCallEvent) => void): Promise<() => void> {
+    const off = await this.listenFn(NATIVE_EVENTS.callEvent, (p) => {
+      handler(p as NativeCallEvent);
     });
     const un = typeof off === 'function' ? off : () => undefined;
     this.unlisteners.push(un);

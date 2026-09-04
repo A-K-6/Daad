@@ -234,4 +234,128 @@ describe('SipContext (native)', () => {
     expect(onCall).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent('no leading zero');
   });
+
+  it('exposes waiting/second-leg state from native call events', async () => {
+    const { client, fireCall } = makeMockClientWithEvents();
+    let ctx: ReturnType<typeof useSip> | null = null;
+    render(
+      <SipProvider client={client}>
+        <Probe onCtx={(c) => { ctx = c; }} />
+      </SipProvider>,
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(ctx!.waitingCall).toBeNull();
+    expect(ctx!.hasSecondLeg).toBe(false);
+    await act(async () => {
+      fireCall({ type: 'call_waiting', from: '1003', call_id: 'cid-w' } as never);
+    });
+    expect(ctx!.waitingCall).toEqual({ from: '1003', callId: 'cid-w' });
+    expect(ctx!.hasSecondLeg).toBe(true);
+    // Answering clears the ringing waiter but a second dialog stays possible
+    // via consult tracking; swapped clears the ringing state.
+    await act(async () => {
+      fireCall({ type: 'swapped', active_call_id: 'cid-w' } as never);
+    });
+    expect(ctx!.waitingCall).toBeNull();
+    await act(async () => {
+      fireCall({ type: 'transfer_failed', call_id: 'cid-a', code: 603 } as never);
+    });
+    expect(ctx!.transferError).toMatch(/603/);
+    await act(async () => {
+      fireCall({ type: 'transfer_requested', call_id: 'cid-a', refer_to: 'sip:1002@pbx' } as never);
+    });
+    expect(ctx!.transferRequested).toEqual({ callId: 'cid-a', referTo: 'sip:1002@pbx' });
+  });
+
+  it('exposes the five call-power actions and clears state on Idle', async () => {
+    const { client, calls, fireCall } = makeMockClientWithEvents();
+    let ctx: ReturnType<typeof useSip> | null = null;
+    render(
+      <SipProvider client={client}>
+        <Probe onCtx={(c) => { ctx = c; }} />
+      </SipProvider>,
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    await act(async () => {
+      await ctx!.transferBlind('1002');
+      await ctx!.consult('1003');
+      await ctx!.transferAttended();
+      await ctx!.swapCalls();
+      await ctx!.answerWaiting();
+    });
+    const cmds = calls.map((c) => c.cmd);
+    for (const expected of [
+      'sip_call_transfer_blind',
+      'sip_call_consult',
+      'sip_call_transfer_attended',
+      'sip_call_swap',
+      'sip_call_answer_waiting',
+    ]) {
+      expect(cmds).toContain(expected);
+    }
+    expect(ctx!.consultTarget).toBe('1003');
+    expect(ctx!.hasSecondLeg).toBe(true);
+    // Invalid targets never reach IPC.
+    const before = calls.length;
+    await expect(ctx!.transferBlind('01')).rejects.toThrow();
+    await expect(ctx!.consult('ab')).rejects.toThrow();
+    expect(calls).toHaveLength(before);
+    // Idle clears waiting/consult/transfer state; no secrets persisted.
+    await act(async () => {
+      fireCall({ type: 'call_waiting', from: '1004', call_id: 'cid-x' } as never);
+      fireCall({ state: 'Idle', info: null } as never);
+    });
+    expect(ctx!.waitingCall).toBeNull();
+    expect(ctx!.consultTarget).toBeNull();
+    expect(ctx!.hasSecondLeg).toBe(false);
+    const stored = localStorage.getItem('daad_sip_profile') || '';
+    expect(stored).not.toContain('1004');
+  });
 });
+
+function makeMockClientWithEvents() {
+  const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+  let connHandler: ((s: never) => void) | null = null;
+  let callHandler: ((s: never) => void) | null = null;
+  let eventHandler: ((s: never) => void) | null = null;
+  const client = new NativeSipClient({
+    invokeFn: async (cmd, args) => {
+      calls.push({ cmd, args });
+      if (cmd === 'sip_status') {
+        return {
+          transportOpen: true,
+          tlsVerified: true,
+          registered: true,
+          registering: false,
+          reconnecting: false,
+          failureKind: 'none',
+          message: null,
+          certStatus: 'verified',
+          contactsReachable: 1,
+        };
+      }
+      if (cmd === 'sip_diagnostics_export') return { ok: 1 };
+      return undefined;
+    },
+    listenFn: (event, handler) => {
+      if (event === 'sip://connection-state') connHandler = handler as never;
+      if (event === 'sip://call-state') callHandler = handler as never;
+      if (event === 'daad-call-event') eventHandler = handler as never;
+      return Promise.resolve(() => undefined);
+    },
+  });
+  return {
+    client,
+    calls,
+    fireConn: (s: never) => connHandler?.(s),
+    fireCall: (s: never) => {
+      // Call-power events arrive on daad-call-event; snapshots on sip://call-state.
+      if (s && typeof (s as { type?: unknown }).type === 'string') eventHandler?.(s);
+      else callHandler?.(s);
+    },
+  };
+}

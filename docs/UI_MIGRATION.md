@@ -75,6 +75,35 @@ Evidence (`bun run test` 22 files / 129 tests green, `bun run typecheck`, `bun r
   secrets); persisted profile (`daad_sip_profile`) carries no password or CA material.
   `callHistory` + `soundService` retained; diagnostics export remains sanitized-only.
 
+## Call power (frontend — native two-dialog slice)
+
+Native facade (`src-tauri/src/lib.rs`): `sip_call_transfer_blind(target)`,
+`sip_call_consult(target)`, `sip_call_transfer_attended`, `sip_call_swap`,
+`sip_call_answer_waiting`; waiting/swap/transfer events on `daad-call-event`
+(`CallWaiting`, `Swapped`, `TransferRequested`, `TransferFailed`, secret-free);
+`sip_diagnostics_export` flags `opus_enabled` / `max_dialogs` (2).
+
+- `src/services/nativeSipClient.ts`: typed wrappers `transferBlind(target)` /
+  `consult(target)` (both validated with `validateDialTarget` pre-IPC —
+  invalid targets never reach the backend), `transferAttended()`, `swap()`,
+  `answerWaiting()`, plus `onCallEvent()` for `daad-call-event`
+  (`NativeCallEvent` in `src/types/sip.ts`). Targets are numeric extensions —
+  never secrets (`sanitizeForLog` coverage in tests).
+- `src/context/SipContext.tsx`: exposes the five actions (`transferBlind`,
+  `consult`, `transferAttended`, `swapCalls`, `answerWaiting`) and second-leg
+  state (`waitingCall` caller id, `consultTarget`, `hasSecondLeg`,
+  `transferError`, `transferRequested`) derived from native events only.
+  `useSip` API otherwise stable. Waiting/consult/transfer state clears on
+  `Idle`/disconnect/logout; password/CA stay transient (never persisted).
+- `src/components/ActiveCallView.tsx` (+ `ActiveCallPower.test.tsx`):
+  Transfer button → numeric target entry (inline guidance) → Blind /
+  Consult-then-Complete flow; Swap visible only while a waiting/held second
+  leg exists; incoming-waiting banner with Accept (hold+answer) / Decline
+  (reject targets the ringing leg, active call stays up); held/waiting
+  badges; obsidian aesthetic preserved (`@/*` aliases, `active:scale-95`,
+  mono numerals).
+- `src/App.tsx`: wires the new context values into `ActiveCallView`.
+
 ## Gaps / follow-ups (post-MVP)
 
 1. Rust commands (`sip_account_upsert`, `sip_register`, `sip_call_*`, …) remain a

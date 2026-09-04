@@ -5,41 +5,73 @@ import {
   Pause,
   Play,
   PhoneOff,
+  PhoneIncoming,
+  PhoneForwarded,
+  ArrowLeftRight,
   Grid,
   Volume2,
   ShieldCheck,
   Check,
   X,
 } from 'lucide-react';
-import { CallState, CallInfo, AudioRoute } from '@/types';
+import { CallState, CallInfo, AudioRoute, WaitingCallInfo } from '@/types';
 import { DtmfKeypadModal } from '@/components/DtmfKeypadModal';
 import { audioDeviceService, AudioDevice } from '@/services/audioDeviceService';
+import { validateDialTarget } from '@/services/nativeSipClient';
 
 interface ActiveCallViewProps {
   callState: CallState;
   callInfo: CallInfo | null;
   audioRoute?: AudioRoute;
+  /** Parked second-leg caller from the native `call_waiting` event. */
+  waitingCall?: WaitingCallInfo | null;
+  /** True while a second dialog is parked (waiting incoming or consult leg). */
+  hasSecondLeg?: boolean;
+  /** Outgoing consult target dialed via consult(); drives Complete flow. */
+  consultTarget?: string | null;
+  /** Last transfer failure text from the native core. */
+  transferError?: string | null;
   onHangup: () => void;
   onToggleMute: () => void;
   onToggleHold: () => void;
   onSendDtmf: (tone: string) => void;
   onAudioRoute?: (route: AudioRoute) => void;
+  onTransferBlind?: (target: string) => Promise<void>;
+  onConsult?: (target: string) => Promise<void>;
+  onTransferAttended?: () => Promise<void>;
+  onSwap?: () => Promise<void>;
+  onAnswerWaiting?: () => Promise<void>;
+  onDeclineWaiting?: () => Promise<void>;
 }
 
 export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
   callState,
   callInfo,
   audioRoute = 'system',
+  waitingCall = null,
+  hasSecondLeg = false,
+  consultTarget = null,
+  transferError = null,
   onHangup,
   onToggleMute,
   onToggleHold,
   onSendDtmf,
   onAudioRoute,
+  onTransferBlind,
+  onConsult,
+  onTransferAttended,
+  onSwap,
+  onAnswerWaiting,
+  onDeclineWaiting,
 }) => {
   const [showDtmf, setShowDtmf] = useState<boolean>(false);
   const [showAudioMenu, setShowAudioMenu] = useState<boolean>(false);
   const [outputDevices, setOutputDevices] = useState<AudioDevice[]>([]);
   const [selectedOutput, setSelectedOutput] = useState<string>('');
+  const [showTransfer, setShowTransfer] = useState<boolean>(false);
+  const [transferTarget, setTransferTarget] = useState<string>('');
+  const [transferLocalError, setTransferLocalError] = useState<string | null>(null);
+  const [transferBusy, setTransferBusy] = useState<boolean>(false);
 
   useEffect(() => {
     const updateDevices = () => {
@@ -94,6 +126,46 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
   const isOutgoingRinging = callState === 'Calling' || callState === 'Ringing';
   const isHeld = callState === 'Holding' || Boolean(callInfo?.isHeld);
   const initials = getInitials(callInfo?.remoteIdentity);
+  const showSwap = Boolean(hasSecondLeg || waitingCall || consultTarget);
+  const canTransfer = callState === 'Active' || callState === 'Holding';
+
+  const runTransfer = async (kind: 'blind' | 'consult') => {
+    const v = validateDialTarget(transferTarget);
+    if (!v.ok) {
+      setTransferLocalError(v.error);
+      return;
+    }
+    setTransferLocalError(null);
+    setTransferBusy(true);
+    try {
+      if (kind === 'blind') {
+        await onTransferBlind?.(transferTarget.trim());
+        setShowTransfer(false);
+        setTransferTarget('');
+      } else {
+        await onConsult?.(transferTarget.trim());
+        // Keep the panel open: consultTarget prop drives the Complete step.
+      }
+    } catch (e) {
+      setTransferLocalError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTransferBusy(false);
+    }
+  };
+
+  const runCompleteAttended = async () => {
+    setTransferLocalError(null);
+    setTransferBusy(true);
+    try {
+      await onTransferAttended?.();
+      setShowTransfer(false);
+      setTransferTarget('');
+    } catch (e) {
+      setTransferLocalError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTransferBusy(false);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full justify-between p-5 select-none relative bg-[var(--surface-1)]">
@@ -112,6 +184,53 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Incoming-waiting banner: second INVITE parked, never auto-answered */}
+      {waitingCall && (
+        <div
+          role="alert"
+          className="mt-2 px-2.5 py-2 rounded-xl bg-[var(--surface-2)] border border-[var(--stroke-2)] shadow-[var(--shadow-2)]"
+        >
+          <div className="flex items-center space-x-1.5 text-[11px] text-[var(--fg-2)]">
+            <PhoneIncoming className="w-3.5 h-3.5 text-[var(--accent)]" />
+            <span>
+              Call waiting:{' '}
+              <span className="font-mono font-semibold text-[var(--fg-1)]">{waitingCall.from}</span>
+            </span>
+            {isHeld && (
+              <span className="px-1.5 py-0.5 rounded-md bg-[var(--warning-bg)] border border-[var(--warning-fg)]/30 text-[10px] font-mono text-[var(--warning-fg)]">
+                primary held
+              </span>
+            )}
+          </div>
+          <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+            <button
+              onClick={() => onAnswerWaiting?.()}
+              title="Accept waiting call (hold + answer)"
+              className="px-2 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-[11px] font-medium transition-all active:scale-95 cursor-pointer"
+            >
+              Accept
+            </button>
+            <button
+              onClick={() => onDeclineWaiting?.()}
+              title="Decline waiting call"
+              className="px-2 py-1.5 rounded-lg bg-[var(--surface-4)] border border-[var(--stroke-2)] text-[var(--fg-2)] text-[11px] font-medium transition-all active:scale-95 cursor-pointer"
+            >
+              Decline
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer failure (core keeps the leg up, media untouched) */}
+      {transferError && (
+        <div
+          role="alert"
+          className="mt-2 px-2.5 py-1.5 rounded-lg bg-[var(--danger-bg)] border border-[var(--danger-fg)]/30 text-[11px] font-mono text-[var(--danger-fg)] text-center"
+        >
+          {transferError}
+        </div>
+      )}
 
       {/* Caller Identity Centerpiece */}
       <div className="flex flex-col items-center justify-center pt-2 pb-1 relative my-auto">
@@ -186,6 +305,32 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
           </div>
         )}
 
+        {/* Second-leg / waiting badges (two-dialog ceiling: max 2) */}
+        {(showSwap || isHeld) && canTransfer && (
+          <div className="mt-2 flex items-center justify-center space-x-1.5">
+            {waitingCall && (
+              <span className="px-2 py-0.5 rounded-md bg-[var(--info-bg)] border border-[var(--accent)]/30 text-[10px] font-mono text-[var(--accent)]">
+                waiting: {waitingCall.from}
+              </span>
+            )}
+            {consultTarget && (
+              <span className="px-2 py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[10px] font-mono text-[var(--fg-2)]">
+                consult: {consultTarget}
+              </span>
+            )}
+            {hasSecondLeg && !waitingCall && !consultTarget && (
+              <span className="px-2 py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[10px] font-mono text-[var(--fg-2)]">
+                2nd leg held
+              </span>
+            )}
+            {isHeld && (
+              <span className="px-2 py-0.5 rounded-md bg-[var(--warning-bg)] border border-[var(--warning-fg)]/30 text-[10px] font-mono text-[var(--warning-fg)]">
+                held
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Multi-frequency Audio Equalizer Waveform */}
         {callState === 'Active' && !isHeld && (
           <div className="flex items-center justify-center space-x-1 mt-3 h-7">
@@ -236,6 +381,37 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
             </span>
           </button>
 
+          {/* Transfer Button */}
+          <button
+            onClick={() => {
+              setTransferLocalError(null);
+              setShowTransfer((prev) => !prev);
+            }}
+            disabled={!canTransfer}
+            title="Transfer call"
+            aria-pressed={showTransfer}
+            className={`flex flex-col items-center justify-center h-16 rounded-xl border transition-all active:scale-95 disabled:opacity-40 shadow-[var(--shadow-2)] cursor-pointer ${
+              showTransfer
+                ? 'bg-[var(--accent-subtle)] border-[var(--accent)] text-[var(--accent)]'
+                : 'bg-[var(--surface-2)] hover:bg-[var(--surface-4)] border-[var(--stroke-2)] hover:border-[var(--stroke-1)] text-[var(--fg-2)] hover:text-[var(--fg-1)]'
+            }`}
+          >
+            <PhoneForwarded className="w-5 h-5" />
+            <span className="text-[10px] font-medium mt-1">Transfer</span>
+          </button>
+
+          {/* Swap Button (only while a waiting/held second leg exists) */}
+          {showSwap && (
+            <button
+              onClick={() => onSwap?.()}
+              title="Swap active and held calls"
+              className="flex flex-col items-center justify-center h-16 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-4)] border border-[var(--stroke-2)] hover:border-[var(--stroke-1)] text-[var(--fg-2)] hover:text-[var(--fg-1)] transition-all active:scale-95 shadow-[var(--shadow-2)] cursor-pointer"
+            >
+              <ArrowLeftRight className="w-5 h-5" />
+              <span className="text-[10px] font-medium mt-1">Swap</span>
+            </button>
+          )}
+
           {/* DTMF Keypad Button */}
           <button
             onClick={() => setShowDtmf(true)}
@@ -272,6 +448,95 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Transfer Target Panel */}
+      {showTransfer && (
+        <div className="absolute inset-x-4 bottom-24 bg-[var(--surface-2)] border border-[var(--stroke-1)] rounded-xl p-3.5 shadow-[var(--shadow-8)] z-20 animate-in fade-in zoom-in-95 duration-100">
+          <div className="flex items-center justify-between pb-2 mb-2 border-b border-[var(--stroke-2)]">
+            <span className="text-xs font-semibold text-[var(--fg-1)]">Transfer call</span>
+            <button
+              onClick={() => setShowTransfer(false)}
+              className="p-1 text-[var(--fg-3)] hover:text-[var(--fg-1)]"
+              aria-label="Close transfer panel"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {consultTarget ? (
+            <div className="space-y-2">
+              <p className="text-[11px] text-[var(--fg-2)]">
+                Consulting{' '}
+                <span className="font-mono font-semibold text-[var(--fg-1)]">{consultTarget}</span>
+                {' '}— primary is held. Complete to join, or hang up the consult to resume.
+              </p>
+              {transferLocalError && (
+                <p role="alert" className="text-[11px] font-mono text-[var(--danger-fg)]">
+                  {transferLocalError}
+                </p>
+              )}
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={runCompleteAttended}
+                  disabled={transferBusy}
+                  className="px-2 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-[11px] font-medium transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
+                >
+                  {transferBusy ? 'Completing…' : 'Complete'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowTransfer(false);
+                    setTransferTarget('');
+                    setTransferLocalError(null);
+                  }}
+                  className="px-2 py-1.5 rounded-lg bg-[var(--surface-4)] border border-[var(--stroke-2)] text-[var(--fg-2)] text-[11px] font-medium transition-all active:scale-95 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label htmlFor="transfer-target" className="text-[11px] text-[var(--fg-3)]">
+                Numeric target (3–8 digits, no leading zero)
+              </label>
+              <input
+                id="transfer-target"
+                value={transferTarget}
+                onChange={(e) => {
+                  setTransferTarget(e.target.value.replace(/[^0-9]/g, '').slice(0, 8));
+                  setTransferLocalError(null);
+                }}
+                inputMode="numeric"
+                placeholder="e.g. 1002"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-1)] border border-[var(--stroke-2)] text-sm font-mono tracking-widest text-[var(--fg-1)] placeholder:text-[var(--fg-3)] focus:outline-none focus:border-[var(--accent)]"
+              />
+              {(transferLocalError || transferError) && (
+                <p role="alert" className="text-[11px] font-mono text-[var(--danger-fg)]">
+                  {transferLocalError || transferError}
+                </p>
+              )}
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => runTransfer('blind')}
+                  disabled={transferBusy}
+                  title="Blind transfer now"
+                  className="px-2 py-1.5 rounded-lg bg-[var(--accent-subtle)] border border-[var(--accent)] text-[var(--accent)] text-[11px] font-medium transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
+                >
+                  {transferBusy ? 'Sending…' : 'Blind'}
+                </button>
+                <button
+                  onClick={() => runTransfer('consult')}
+                  disabled={transferBusy}
+                  title="Consult first, then complete"
+                  className="px-2 py-1.5 rounded-lg bg-[var(--surface-4)] border border-[var(--stroke-2)] text-[var(--fg-2)] text-[11px] font-medium transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
+                >
+                  {transferBusy ? 'Dialing…' : 'Consult'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Audio Device Selector Dropdown / Overlay */}
       {showAudioMenu && (
