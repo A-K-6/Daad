@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Eye, EyeOff, AlertCircle, Server, Shield, FileUp } from 'lucide-react';
 import type { ConnectionState, SipConfig } from '@/types';
 import { CertTrustBadge } from '@/components/CertTrustBadge';
-import { validateCaPem, validateExtension } from '@/services/nativeSipClient';
+import { validateCaPem, validateExtension, validateDeviceUsername, usernameFromSipUri } from '@/services/nativeSipClient';
 import type { CertTrustStatus } from '@/types';
 
 interface ProvisioningViewProps {
@@ -53,15 +53,43 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
   const [caFileName, setCaFileName] = useState<string>('');
   const [caError, setCaError] = useState<string | null>(null);
   const [extError, setExtError] = useState<string | null>(null);
+  const [userError, setUserError] = useState<string | null>(null);
+  const [uriMatchError, setUriMatchError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
+  const checkUriMatch = (sipUri: string, username: string): string | null => {
+    const uriUser = usernameFromSipUri(sipUri);
+    if (!uriUser || !username.trim()) return null;
+    return uriUser === username.trim()
+      ? null
+      : `SIP URI user '${uriUser}' must match the device username '${username.trim()}'.`;
+  };
+
   const handleChange = (field: keyof SipConfig, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    if (field === 'username') {
-      const v = validateExtension(value);
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      // Auto-derive the device username from the SIP URI while the user
+      // hasn't typed a custom one.
+      if (field === 'sipUri' && !prev.username.trim()) {
+        const derived = usernameFromSipUri(value);
+        if (derived) next.username = derived;
+      }
+      return next;
+    });
+    if (field === 'extension') {
+      const v = value.trim() ? validateExtension(value) : { ok: true, error: null };
       setExtError(v.ok ? null : v.error);
+    }
+    if (field === 'username') {
+      const v = validateDeviceUsername(value);
+      setUserError(v.ok ? null : v.error);
+    }
+    if (field === 'username' || field === 'sipUri') {
+      const cur = field === 'sipUri' ? value : formData.sipUri;
+      const usr = field === 'username' ? value : formData.username;
+      setUriMatchError(checkUriMatch(cur, usr));
     }
   };
 
@@ -81,9 +109,21 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const ext = validateExtension(formData.username);
-    if (!ext.ok) {
-      setExtError(ext.error);
+    const user = validateDeviceUsername(formData.username);
+    if (!user.ok) {
+      setUserError(user.error);
+      return;
+    }
+    if (formData.extension?.trim()) {
+      const ext = validateExtension(formData.extension);
+      if (!ext.ok) {
+        setExtError(ext.error);
+        return;
+      }
+    }
+    const mismatch = checkUriMatch(formData.sipUri, formData.username);
+    if (mismatch) {
+      setUriMatchError(mismatch);
       return;
     }
     const ca = validateCaPem(customCaPem);
@@ -179,14 +219,13 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="block text-[12px] font-medium mb-1">Extension</label>
+            <label className="block text-[12px] font-medium mb-1">Extension (optional)</label>
             <input
               type="text"
-              required
               aria-label="Extension"
-              value={formData.username}
-              onChange={(e) => handleChange('username', e.target.value)}
-              placeholder="1001"
+              value={formData.extension || ''}
+              onChange={(e) => handleChange('extension', e.target.value)}
+              placeholder="2001"
               inputMode="numeric"
               className="w-full px-3 py-2 rounded-lg bg-[#0c0e15] border border-white/[0.08] text-[12px] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-white/20"
             />
@@ -196,6 +235,28 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
               </p>
             )}
           </div>
+          <div>
+            <label className="block text-[12px] font-medium mb-1">Device SIP username</label>
+            <input
+              type="text"
+              required
+              aria-label="Device SIP username"
+              value={formData.username}
+              onChange={(e) => handleChange('username', e.target.value)}
+              placeholder="guest-2001"
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full px-3 py-2 rounded-lg bg-[#0c0e15] border border-white/[0.08] text-[12px] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-white/20"
+            />
+            {userError && (
+              <p role="alert" className="mt-1 text-[11px] text-rose-400 font-mono">
+                {userError}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2">
           <div>
             <label className="block text-[12px] font-medium mb-1">SIP Password</label>
             <div className="relative">
@@ -235,6 +296,11 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
             placeholder="sip:1001@pbx.example.com"
             className="w-full px-3 py-2 rounded-lg bg-[#0c0e15] border border-white/[0.08] text-[12px] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-white/20"
           />
+          {uriMatchError && (
+            <p role="alert" className="mt-1 text-[11px] text-rose-400 font-mono">
+              {uriMatchError}
+            </p>
+          )}
         </div>
 
         <div>
@@ -290,6 +356,7 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
           )}
           <p className="mt-1 text-[10px] text-zinc-600 font-mono">
             Pasted or loaded CA is sent once via IPC and never logged or stored in the webview.
+            Private cores (IP/VPN, self-signed chain) fail closed with “Cert unknown” until their CA is supplied here.
           </p>
         </div>
 

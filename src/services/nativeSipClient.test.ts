@@ -3,6 +3,8 @@ import {
   NativeSipClient,
   validateDialTarget,
   validateExtension,
+  validateDeviceUsername,
+  usernameFromSipUri,
   validateCaPem,
   stripSecrets,
   sanitizeDiagnostics,
@@ -218,6 +220,61 @@ describe('NativeSipClient IPC', () => {
         customCaPem: 'not-a-cert',
       }),
     ).rejects.toThrow(/PEM/);
+  });
+
+  it('uses snake_case IPC keys matching the Rust sip_account_upsert signature', async () => {    let upsertArgs: Record<string, unknown> | undefined;
+    const client = new NativeSipClient({
+      invokeFn: async (cmd, args) => {
+        if (cmd === 'sip_account_upsert') upsertArgs = args;
+        return undefined;
+      },
+      listenFn: () => () => undefined,
+    });
+    await client.accountUpsert({
+      serverUrl: 'tls://10.41.113.71:5061',
+      sipUri: 'sip:2001@10.41.113.71',
+      username: '2001',
+      password: 'pw',
+    });
+    // Must match `sip_account_upsert(server_url, sip_uri, username, ...)`
+    // in src-tauri/src/lib.rs exactly — Tauri arg names are case-sensitive.
+    // camelCase `serverUrl` or a nested `account` object breaks the invoke.
+    expect(upsertArgs).toMatchObject({
+      server_url: 'tls://10.41.113.71:5061',
+      sip_uri: 'sip:2001@10.41.113.71',
+      username: '2001',
+      password: 'pw',
+    });
+    expect(upsertArgs).not.toHaveProperty('serverUrl');
+    expect(upsertArgs).not.toHaveProperty('account');
+  });
+
+  it('forwards the numeric extension and validates device usernames', async () => {
+    let upsertArgs: Record<string, unknown> | undefined;
+    const client = new NativeSipClient({
+      invokeFn: async (cmd, args) => {
+        if (cmd === 'sip_account_upsert') upsertArgs = args;
+        return undefined;
+      },
+      listenFn: () => () => undefined,
+    });
+    await client.accountUpsert({
+      serverUrl: 'tls://10.41.113.71:5061',
+      sipUri: 'sip:guest-2001@10.41.113.71',
+      username: 'guest-2001',
+      extension: '2001',
+      password: 'pw',
+    });
+    expect(upsertArgs).toMatchObject({ username: 'guest-2001', extension: '2001' });
+
+    for (const good of ['2001', 'guest-2001', 'desk.02', 'phone_a-1']) {
+      expect(validateDeviceUsername(good).ok).toBe(true);
+    }
+    for (const bad of ['', 'sip:2001', '2001@pbx', 'has space', 'bang!']) {
+      expect(validateDeviceUsername(bad).ok).toBe(false);
+    }
+    expect(usernameFromSipUri('sip:guest-2001@10.41.113.71')).toBe('guest-2001');
+    expect(usernameFromSipUri('not-a-uri')).toBe('');
   });
 
   it('subscribes to tauri events and disposes without duplicates', async () => {

@@ -76,6 +76,7 @@ export function toSafeProfile(cfg: SipConfig): SafeSipConfig {
     serverUrl: cfg.serverUrl,
     sipUri: cfg.sipUri,
     username: cfg.username,
+    extension: cfg.extension?.trim() || undefined,
     displayName: cfg.displayName,
     registerExpires: cfg.registerExpires,
   };
@@ -312,6 +313,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
           serverUrl: safe.serverUrl,
           sipUri: safe.sipUri,
           username: safe.username,
+          extension: safe.extension,
           password: transientPassword,
           displayName: safe.displayName,
           registerExpires: safe.registerExpires,

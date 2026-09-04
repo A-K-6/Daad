@@ -622,14 +622,14 @@ fn parse_sip_uri(sip_uri: &str) -> Result<(String, String), String> {
     let no_scheme = raw
         .strip_prefix("sip:")
         .or_else(|| raw.strip_prefix("SIP:"))
-        .ok_or_else(|| "sipUri must look like sip:<extension>@<domain>".to_string())?;
+        .ok_or_else(|| "sipUri must look like sip:<device-username>@<domain>".to_string())?;
     let (user, domain) = no_scheme
         .split_once('@')
-        .ok_or_else(|| "sipUri must look like sip:<extension>@<domain>".to_string())?;
+        .ok_or_else(|| "sipUri must look like sip:<device-username>@<domain>".to_string())?;
     let user = user.trim().to_string();
     let domain = domain.split(';').next().unwrap_or("").trim().to_string();
     if user.is_empty() || domain.is_empty() {
-        return Err("sipUri must look like sip:<extension>@<domain>".into());
+        return Err("sipUri must look like sip:<device-username>@<domain>".into());
     }
     Ok((user, domain))
 }
@@ -662,17 +662,28 @@ async fn sip_account_upsert(
     display_name: Option<String>,
     register_expires: Option<u32>,
     custom_ca_pem: Option<String>,
+    extension: Option<String>,
 ) -> Result<(), String> {
     if password.is_empty() {
         return Err("password is required for provisioning".into());
     }
     let username = username.trim().to_string();
-    sip_core::account::validate_extension(&username)
-        .map_err(|e| format!("invalid username/extension: {e}"))?;
+    sip_core::account::validate_device_username(&username)
+        .map_err(|e| format!("invalid device username: {e}"))?;
+    let extension = match extension.map(|e| e.trim().to_string()).filter(|e| !e.is_empty()) {
+        Some(ext) => {
+            sip_core::account::validate_extension(&ext)
+                .map_err(|e| format!("invalid extension: {e}"))?;
+            Some(ext)
+        }
+        None => None,
+    };
     let (transport, hostname, port) = parse_server_url(&server_url)?;
     let (uri_user, domain) = parse_sip_uri(&sip_uri)?;
     if uri_user != username {
-        return Err("sipUri user must match username".into());
+        return Err(format!(
+            "SIP URI user '{uri_user}' must match the provisioned device username '{username}'"
+        ));
     }
     let profile = SipProfile {
         account_id: NATIVE_ACCOUNT_ID.to_string(),
@@ -680,6 +691,7 @@ async fn sip_account_upsert(
         port,
         transport,
         username,
+        extension,
         display_name: display_name
             .map(|d| d.trim().to_string())
             .filter(|d| !d.is_empty()),
@@ -2016,6 +2028,7 @@ mod native_facade_tests {
                 port: 5061,
                 transport: SipTransport::Tls,
                 username: "2001".into(),
+                extension: Some("2001".into()),
                 display_name: None,
                 domain: None,
                 ca_pem: None,

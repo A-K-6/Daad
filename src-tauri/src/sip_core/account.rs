@@ -105,8 +105,13 @@ pub struct SipProfile {
     pub hostname: String,
     pub port: u16,
     pub transport: SipTransport,
-    /// Extension / authorization username (numeric, 3–8 digits).
+    /// Device-scoped SIP registration identity (provisioned per device;
+    /// may differ from the numeric extension, e.g. `guest-2001`).
+    /// Must equal the user part of the account SIP URI.
     pub username: String,
+    /// Numeric person/profile extension (3–8 digits, no leading zero).
+    /// Used for display and dialling; `None` until provisioned.
+    pub extension: Option<String>,
     pub display_name: Option<String>,
     /// SIP domain for the AoR; defaults to `hostname` when empty.
     pub domain: Option<String>,
@@ -129,8 +134,11 @@ impl SipProfile {
         if self.port == 0 {
             return Err("port must be 1..=65535".into());
         }
-        validate_extension(&self.username)
-            .map_err(|e| format!("invalid username/extension: {e}"))?;
+        validate_device_username(&self.username)
+            .map_err(|e| format!("invalid device username: {e}"))?;
+        if let Some(ext) = self.extension.as_deref().filter(|e| !e.trim().is_empty()) {
+            validate_extension(ext).map_err(|e| format!("invalid extension: {e}"))?;
+        }
         if !(60..=3600).contains(&self.expires_secs) {
             return Err(format!(
                 "expires_secs must be 60..=3600, got {}",
@@ -188,6 +196,25 @@ impl SipProfile {
     }
 }
 
+/// Device username rule: provisioned per-device registration identity.
+/// 1–64 chars of ASCII letters/digits plus `.` `_` `-` (e.g. `2001`,
+/// `guest-2001`). Anything else is rejected — never silently normalised.
+pub fn validate_device_username(user: &str) -> Result<(), String> {
+    let t = user.trim();
+    if t.is_empty() {
+        return Err("device username must not be empty".into());
+    }
+    if t.len() > 64 {
+        return Err("device username must be 1-64 characters".into());
+    }
+    if !t.bytes().all(|b| {
+        b.is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-'
+    }) {
+        return Err("device username allows letters, digits, '.', '_' and '-' only".into());
+    }
+    Ok(())
+}
+
 /// Numeric extension dialling rule: 3–8 ASCII digits, nothing else.
 /// Leading zeros are rejected (JBM single-profile dial plan: extensions are
 /// non-zero-prefixed; matches the webview `validateDialTarget`).
@@ -240,6 +267,7 @@ mod tests {
             port: 5061,
             transport: SipTransport::Tls,
             username: "2001".into(),
+            extension: Some("2001".into()),
             display_name: Some("User 2001".into()),
             domain: None,
             ca_pem: None,
@@ -271,6 +299,24 @@ mod tests {
         assert!(SipTransport::parse("").is_err());
         assert_eq!(SipTransport::Tls.default_port(), 5061);
         assert_eq!(SipTransport::Tcp.default_port(), 5060);
+    }
+
+    #[test]
+    fn device_username_rule_allows_provisioned_identities() {
+        for good in ["2001", "guest-2001", "desk.02", "phone_a-1"] {
+            assert!(validate_device_username(good).is_ok(), "{good}");
+        }
+        for bad in ["", "   ", "sip:2001", "2001@pbx", " guess space ", "user!x", "é2001"] {
+            assert!(validate_device_username(bad).is_err(), "{bad}");
+        }
+        // Device identity is independent of the numeric extension rule.
+        assert!(validate_extension("guest-2001").is_err());
+        let mut p = valid_profile();
+        p.username = "guest-2001".into();
+        p.extension = Some("2001".into());
+        assert!(p.validate().is_ok());
+        p.extension = Some("01".into());
+        assert!(p.validate().is_err());
     }
 
     #[test]

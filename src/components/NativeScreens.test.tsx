@@ -90,7 +90,7 @@ describe('ProvisioningView', () => {
     const onProvision = vi.fn(async () => undefined);
     render(
       <ProvisioningView
-        initialConfig={{ ...base, username: 'abc' }}
+        initialConfig={{ ...base, extension: 'abc' }}
         connectionState="Disconnected"
         connectionError={null}
         certStatus="unknown"
@@ -101,6 +101,31 @@ describe('ProvisioningView', () => {
     fireEvent.change(screen.getByLabelText('SIP Password'), { target: { value: 'pw123' } });
     fireEvent.click(screen.getByText('Provision & Register'));
     expect(screen.getByRole('alert').textContent).toMatch(/numeric/i);
+    expect(onProvision).not.toHaveBeenCalled();
+  });
+  it('accepts provisioned device usernames and blocks URI mismatches', async () => {
+    const onProvision = vi.fn(async () => undefined);
+    render(
+      <ProvisioningView
+        initialConfig={{ ...base, sipUri: 'sip:guest-2001@pbx', username: 'guest-2001', extension: '2001' }}
+        connectionState="Disconnected"
+        connectionError={null}
+        certStatus="unknown"
+        onProvision={onProvision}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('SIP Password'), { target: { value: 'pw123' } });
+    fireEvent.click(screen.getByText('Provision & Register'));
+    expect(onProvision).toHaveBeenCalledTimes(1);
+    expect(onProvision).toHaveBeenCalledWith(
+      expect.objectContaining({ username: 'guest-2001', extension: '2001' }),
+    );
+
+    onProvision.mockClear();
+    await vi.waitFor(() => expect(screen.getByText('Provision & Register')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('Device SIP username'), { target: { value: 'other-user' } });
+    fireEvent.click(screen.getByText('Provision & Register'));
+    expect(screen.getByRole('alert').textContent).toMatch(/must match the device username/i);
     expect(onProvision).not.toHaveBeenCalled();
   });
   it('rejects malformed CA PEM before IPC', () => {

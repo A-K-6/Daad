@@ -17,6 +17,8 @@ export interface AccountUpsertArgs {
   serverUrl: string;
   sipUri: string;
   username: string;
+  /** Numeric person/profile extension (optional, 3–8 digits). */
+  extension?: string;
   password: string;
   displayName?: string;
   registerExpires?: number;
@@ -60,6 +62,25 @@ export function validateDialTarget(raw: string): DialValidation {
   return { ok: true, error: null };
 }
 
+/** Device username validation — provisioned per-device identity (e.g. "guest-2001"). Mirrors Rust `validate_device_username`. */
+export function validateDeviceUsername(raw: string): DialValidation {
+  const t = (raw || '').trim();
+  if (!t) return { ok: false, error: 'Enter the provisioned SIP username.' };
+  if (t.length > 64) return { ok: false, error: 'SIP username must be 1–64 characters.' };
+  if (!/^[A-Za-z0-9._-]+$/.test(t)) {
+    return { ok: false, error: "SIP username allows letters, digits, '.', '_' and '-' only." };
+  }
+  return { ok: true, error: null };
+}
+
+/** Extract the user part from a `sip:<user>@<domain>` URI (empty string when unparsable). */
+export function usernameFromSipUri(raw: string): string {
+  const t = (raw || '').trim();
+  const noScheme = t.replace(/^sip:/i, '');
+  const at = noScheme.indexOf('@');
+  if (at <= 0) return '';
+  return noScheme.slice(0, at).split(';')[0].trim();
+}
 /** Extension validation for provisioning — same numeric-only rule as dialing. */
 export function validateExtension(raw: string): DialValidation {
   const v = validateDialTarget(raw);
@@ -251,6 +272,7 @@ export class NativeSipClient {
       password: args.password,
       display_name: args.displayName?.trim() || undefined,
       register_expires: args.registerExpires ?? 600,
+      ...(args.extension?.trim() ? { extension: args.extension.trim() } : {}),
       ...(caPem ? { custom_ca_pem: caPem } : {}),
     });
   }

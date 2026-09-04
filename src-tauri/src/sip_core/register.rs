@@ -605,6 +605,7 @@ mod tests {
             port: 5061,
             transport: SipTransport::Tls,
             username: "2001".into(),
+            extension: Some("2001".into()),
             display_name: None,
             domain: None,
             ca_pem: None,
