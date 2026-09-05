@@ -9,7 +9,7 @@ describe('UpdateService', () => {
   it('returns current version string', () => {
     const version = updateService.getCurrentVersion();
     expect(typeof version).toBe('string');
-    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(version).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
   });
 
   it('detects when an update is available from GitHub API', async () => {

@@ -50,17 +50,18 @@ const SENSITIVE_KEYS = new Set([
 
 export function validateDialTarget(raw: string): DialValidation {
   const target = (raw || '').trim();
-  if (!target) return { ok: false, error: 'Enter a number (3–8 digits).' };
-  if (!/^[0-9]+$/.test(target)) {
-    return { ok: false, error: 'Numeric digits only (0–9).' };
-  }
-  if (target.length < 3 || target.length > 8) {
-    return { ok: false, error: 'Number must be 3–8 digits.' };
-  }
-  if (target.startsWith('0')) {
-    return { ok: false, error: 'Number must not start with 0.' };
-  }
+  if (!/^\+?[0-9]{1,20}$/.test(target))
+    return { ok: false, error: 'Enter a phone number or extension (digits, with an optional leading +).' };
   return { ok: true, error: null };
+}
+
+/** Recover a dialable number from native or legacy history without dialing a URI. */
+export function dialTargetFromIdentity(raw: string): string | null {
+  const text = (raw || '').trim();
+  if (validateDialTarget(text).ok) return text;
+  if (/[\r\n]/.test(text)) return null;
+  const match = text.match(/^(?:"[^"<>]*"\s*)?<?sips?:(\+?[0-9]{1,20})@[^\s<>]+>?$/i);
+  return match?.[1] || null;
 }
 
 /** Device username validation — provisioned per-device identity (e.g. "guest-2001"). Mirrors Rust `validate_device_username`. */
@@ -82,14 +83,20 @@ export function usernameFromSipUri(raw: string): string {
   if (at <= 0) return '';
   return noScheme.slice(0, at).split(';')[0].trim();
 }
+
+/** The common account needs only a server and username; a SIP URI is advanced. */
+export function deriveSipUri(server: string, username: string): string {
+  try {
+    const raw = server.trim();
+    const url = new URL(raw.includes('://') ? raw : `tls://${raw}`);
+    return url.hostname && username.trim() ? `sip:${username.trim()}@${url.hostname}` : '';
+  } catch { return ''; }
+}
 /** Extension validation for provisioning — same numeric-only rule as dialing. */
 export function validateExtension(raw: string): DialValidation {
-  const v = validateDialTarget(raw);
-  if (!v.ok) {
-    if (!((raw || '').trim())) return { ok: false, error: 'Enter your extension (3–8 digits).' };
-    return { ok: false, error: `${v.error} Extension must be numeric (3–8 digits, no leading zero).` };
-  }
-  return v;
+  return /^[1-9][0-9]{2,7}$/.test((raw || '').trim())
+    ? { ok: true, error: null }
+    : { ok: false, error: 'Extension must be numeric (3–8 digits, no leading zero).' };
 }
 
 export interface CaPemValidation {
@@ -206,7 +213,7 @@ export function mapNativeStatusToConnectionState(status: NativeSipStatus): Conne
     case 'mic':
       return 'MicFailed';
     case 'unreachable':
-      return 'NoReachableContact';
+      return 'RegistrationFailed';
     case 'generic':
       return 'RegistrationFailed';
     case 'none':
@@ -347,7 +354,7 @@ export class NativeSipClient {
    * invalid targets never reach the backend.
    */
   async transferBlind(target: string): Promise<void> {
-    const v = validateDialTarget(target);
+    const v = validateExtension(target);
     if (!v.ok) throw new Error(v.error || 'Invalid transfer target');
     await this.call('sip_call_transfer_blind', { target: target.trim() });
   }
@@ -357,7 +364,7 @@ export class NativeSipClient {
    * and dials the numeric consult target as the second dialog.
    */
   async consult(target: string): Promise<void> {
-    const v = validateDialTarget(target);
+    const v = validateExtension(target);
     if (!v.ok) throw new Error(v.error || 'Invalid consult target');
     await this.call('sip_call_consult', { target: target.trim() });
   }

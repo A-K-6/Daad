@@ -8,7 +8,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { callHistoryService, nativeSipClient, NativeSipClient } from '@/services';
-import { validateDialTarget, mapNativeStatusToConnectionState } from '@/services/nativeSipClient';
+import { validateDialTarget, validateExtension, mapNativeStatusToConnectionState } from '@/services/nativeSipClient';
 import {
   SipConfig,
   SafeSipConfig,
@@ -38,10 +38,10 @@ export function purgeLegacyConfig(): void {
 }
 
 const DEFAULT_PROFILE: SafeSipConfig = {
-  serverUrl: 'tls://pbx.example.com:5061',
-  sipUri: 'sip:1001@pbx.example.com',
-  username: '1001',
-  displayName: 'User 1001',
+  serverUrl: '',
+  sipUri: '',
+  username: '',
+  displayName: '',
   registerExpires: 600,
 };
 
@@ -93,6 +93,7 @@ interface SipContextType {
   config: SipConfig;
   connectionState: ConnectionState;
   connectionError: string | null;
+  callError: string | null;
   callState: CallState;
   callInfo: CallInfo | null;
   callHistory: CallRecord[];
@@ -154,6 +155,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
 
   const [connectionState, setConnectionState] = useState<ConnectionState>('Disconnected');
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [callError, setCallError] = useState<string | null>(null);
   const [callState, setCallState] = useState<CallState>('Idle');
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [callHistory, setCallHistory] = useState<CallRecord[]>(() =>
@@ -184,9 +186,10 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
   const applyNativeCall = useCallback(
     (state: CallState, info: CallInfo | null) => {
       const prev = lastCallRef.current;
+      if (prev.state === 'Idle' && state !== 'Idle') setCallError(null);
       // Log call history on termination using Rust-owned timestamps only.
       if (state === 'Idle' && prev.state !== 'Idle' && prev.info) {
-        const done = prev.info;
+        const done = info || prev.info;
         const duration =
           typeof done.duration === 'number'
             ? done.duration
@@ -198,7 +201,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
             target: done.remoteIdentity,
             displayName: done.remoteIdentity,
             direction: done.direction,
-            status: duration > 0 ? 'answered' : 'missed',
+            status: done.startTime !== null ? 'answered' : 'missed',
             duration,
           });
         } catch {
@@ -268,6 +271,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
           break;
         case 'failed':
           setWaitingCall(null);
+          setCallError(ev.reason);
           break;
         default:
           break;
@@ -315,6 +319,23 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
         unsubs.push(u4);
       } catch {
         /* noop */
+      }
+      if (!disposed && localStorage.getItem(SESSION_KEY) === '1') {
+        try {
+          await native.register();
+          const status = await native.getStatus();
+          if (!disposed) applyNativeStatus(status);
+        } catch (error) {
+          if (!disposed) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (message.includes('No saved account')) {
+              localStorage.removeItem(SESSION_KEY);
+              setHasLoggedIn(false);
+            }
+            setConnectionState('RegistrationFailed');
+            setConnectionError(message);
+          }
+        }
       }
     })();
 
@@ -376,15 +397,13 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
       const transientPassword = cfg?.password || '';
       const transientCaPem = (cfg?.customCaPem || '').trim();
       const safe = toSafeProfile(full);
-      setProfile(safe);
-      persistProfile(safe);
       // Purge any legacy persisted secrets on every connect attempt.
       purgeLegacyConfig();
 
-      if (!transientPassword) {
+      if (cfg && !transientPassword) {
         setConnectionState('AuthFailed');
         setConnectionError('Password required. Credentials are kept in the native vault only.');
-        return;
+        throw new Error('Password required. Credentials are kept in the native vault only.');
       }
       if (transientCaPem) {
         const { validateCaPem } = await import('@/services/nativeSipClient');
@@ -399,7 +418,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
       setConnectionState('Registering');
       setConnectionError(null);
       try {
-        await native.accountUpsert({
+        if (cfg) await native.accountUpsert({
           serverUrl: safe.serverUrl,
           sipUri: safe.sipUri,
           username: safe.username,
@@ -410,6 +429,8 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
           ...(transientCaPem ? { customCaPem: transientCaPem } : {}),
         });
         if (opSeq.current !== myOp) return;
+        setProfile(safe);
+        persistProfile(safe);
         await native.register();
         if (opSeq.current !== myOp) return;
         try {
@@ -490,6 +511,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
     async (target: string) => {
       const v = validateDialTarget(target);
       if (!v.ok) throw new Error(v.error || 'Invalid number');
+      setCallError(null);
       await native.invite(target.trim());
     },
     [native],
@@ -509,17 +531,16 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
 
   const toggleMute = useCallback(() => {
     if (callInfo) {
-      native.setMuted(!callInfo.isMuted).catch(() => undefined);
-      setCallInfo({ ...callInfo, isMuted: !callInfo.isMuted });
+      setCallError(null);
+      native.setMuted(!callInfo.isMuted).catch((error) => setCallError(String(error)));
     }
   }, [callInfo, native]);
 
   const toggleHold = useCallback(async () => {
     if (callInfo) {
       const held = !callInfo.isHeld;
-      await native.setHeld(held).catch(() => undefined);
-      setCallInfo({ ...callInfo, isHeld: held });
-      setCallState(held ? 'Holding' : 'Active');
+      setCallError(null);
+      await native.setHeld(held).catch((error) => setCallError(String(error)));
     }
   }, [callInfo, native]);
 
@@ -540,7 +561,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
 
   const transferBlind = useCallback(
     async (target: string) => {
-      const v = validateDialTarget(target);
+      const v = validateExtension(target);
       if (!v.ok) throw new Error(v.error || 'Invalid number');
       setTransferError(null);
       try {
@@ -556,7 +577,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
 
   const consult = useCallback(
     async (target: string) => {
-      const v = validateDialTarget(target);
+      const v = validateExtension(target);
       if (!v.ok) throw new Error(v.error || 'Invalid number');
       setTransferError(null);
       await native.consult(target.trim());
@@ -611,6 +632,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
         config: toSipConfigForDisplay(profile),
         connectionState,
         connectionError,
+        callError,
         callState,
         callInfo,
         callHistory,

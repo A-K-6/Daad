@@ -12,7 +12,7 @@ describe('StatusBar Component', () => {
     displayName: 'Aeen Softphone',
   };
 
-  it('renders Registered state with green indicator and display name', () => {
+  it('renders the registered account rather than a stale display label', () => {
     render(
       <StatusBar
         connectionState="Registered"
@@ -22,7 +22,8 @@ describe('StatusBar Component', () => {
       />
     );
 
-    expect(screen.getByText('Aeen Softphone')).toBeInTheDocument();
+    expect(screen.getByText('1001')).toBeInTheDocument();
+    expect(screen.queryByText('Aeen Softphone')).not.toBeInTheDocument();
     expect(screen.getByText('sip:1001@pbx.example.com')).toBeInTheDocument();
     const dot = screen.getByTestId('status-dot');
     expect(dot.className).toContain('bg-emerald-500');

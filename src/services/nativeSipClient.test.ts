@@ -2,9 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   NativeSipClient,
   validateDialTarget,
+  dialTargetFromIdentity,
   validateExtension,
   validateDeviceUsername,
   usernameFromSipUri,
+  deriveSipUri,
   validateCaPem,
   stripSecrets,
   sanitizeDiagnostics,
@@ -13,19 +15,34 @@ import {
 } from './nativeSipClient';
 
 describe('validateDialTarget', () => {
-  it('accepts 3-8 digits without leading zero', () => {
+  it('extracts only dialable SIP users from recent calls', () => {
+    expect(dialTargetFromIdentity('sip:09123456789@pbx:5061;transport=tls')).toBe('09123456789');
+    expect(dialTargetFromIdentity('"Alice" <sip:+98123456789@pbx>')).toBe('+98123456789');
+    expect(dialTargetFromIdentity('2001')).toBe('2001');
+    expect(dialTargetFromIdentity('"2001" <sip:asterisk@pbx>')).toBeNull();
+    expect(dialTargetFromIdentity('sip:2001@pbx\r\nVia: injected')).toBeNull();
+  });
+  it('derives SIP identity from a server without leaking scheme or port into the domain', () => {
+    expect(deriveSipUri('tls://10.0.0.1:5061', 'guest-2001')).toBe('sip:guest-2001@10.0.0.1');
+    expect(deriveSipUri('pbx.example.com', '1001')).toBe('sip:1001@pbx.example.com');
+    expect(deriveSipUri('tls://[::1]:5061', '1001')).toBe('sip:1001@[::1]');
+  });
+  it('accepts extensions, national and international phone numbers', () => {
     expect(validateDialTarget('101').ok).toBe(true);
     expect(validateDialTarget('911').ok).toBe(true);
     expect(validateDialTarget('1002').ok).toBe(true);
     expect(validateDialTarget('12345678').ok).toBe(true);
+    expect(validateDialTarget('02112345678').ok).toBe(true);
+    expect(validateDialTarget('+982112345678').ok).toBe(true);
+    expect(validateDialTarget('12').ok).toBe(true);
   });
-  it('rejects leading zero, short/long, non-numeric', () => {
-    expect(validateDialTarget('012').ok).toBe(false);
-    expect(validateDialTarget('12').ok).toBe(false);
-    expect(validateDialTarget('123456789').ok).toBe(false);
+  it('rejects malformed numbers and SIP injection', () => {
+    expect(validateDialTarget('1'.repeat(21)).ok).toBe(false);
+    expect(validateDialTarget('12\r\nVia: evil').ok).toBe(false);
+    expect(validateDialTarget('sip:123@evil').ok).toBe(false);
     expect(validateDialTarget('12a').ok).toBe(false);
     expect(validateDialTarget('*#').ok).toBe(false);
-    expect(validateDialTarget('+123').ok).toBe(false);
+    expect(validateDialTarget('++123').ok).toBe(false);
     expect(validateDialTarget('').ok).toBe(false);
   });
 });
@@ -113,7 +130,7 @@ describe('mapNativeStatusToConnectionState', () => {
     expect(mapNativeStatusToConnectionState({ ...base, failureKind: 'cert' })).toBe('CertFailed');
     expect(mapNativeStatusToConnectionState({ ...base, failureKind: 'mic' })).toBe('MicFailed');
     expect(mapNativeStatusToConnectionState({ ...base, failureKind: 'unreachable' })).toBe(
-      'NoReachableContact',
+      'RegistrationFailed',
     );
     expect(mapNativeStatusToConnectionState({ ...base, failureKind: 'generic' })).toBe(
       'RegistrationFailed',
@@ -187,8 +204,8 @@ describe('NativeSipClient IPC', () => {
   it('rejects invalid dial targets and dtmf before IPC', async () => {
     const invokeFn = vi.fn(async () => undefined);
     const client = new NativeSipClient({ invokeFn, listenFn: () => () => undefined });
-    await expect(client.invite('01')).rejects.toThrow();
-    await expect(client.invite('12')).rejects.toThrow();
+    await expect(client.invite('sip:1@evil')).rejects.toThrow();
+    await expect(client.invite('12;transport=udp')).rejects.toThrow();
     await expect(client.sendDtmf('X')).rejects.toThrow();
     expect(invokeFn).not.toHaveBeenCalled();
   });

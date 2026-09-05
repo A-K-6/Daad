@@ -61,7 +61,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   const getStatusText = () => {
     switch (connectionState) {
       case 'Registered':
-        return config.displayName || config.username || 'Registered';
+        return config.username || config.displayName || 'Registered';
       case 'Connecting':
         return 'Connecting...';
       case 'NetworkConnected':

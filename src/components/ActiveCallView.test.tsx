@@ -4,6 +4,13 @@ import { ActiveCallView } from './ActiveCallView';
 import { CallInfo } from '@/types';
 
 describe('ActiveCallView Component', () => {
+  it('keeps the native alpha controls to supported call actions', () => {
+    render(<ActiveCallView simple callState="Active" callInfo={null}
+      onHangup={vi.fn()} onToggleMute={vi.fn()} onToggleHold={vi.fn()} onSendDtmf={vi.fn()} />);
+    expect(screen.queryByTitle('Transfer call')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Audio Devices')).not.toBeInTheDocument();
+    expect(screen.getByTitle('In-Call Keypad')).toBeInTheDocument();
+  });
   const sampleCallInfo: CallInfo = {
     remoteIdentity: '1002 - Support Desk',
     remoteUri: 'sip:1002@pbx.example.com',
@@ -161,4 +168,3 @@ describe('ActiveCallView Component', () => {
     expect(screen.getByText('Audio Output')).toBeInTheDocument();
   });
 });
-

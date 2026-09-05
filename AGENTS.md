@@ -1,3 +1,17 @@
+# Current native alpha architecture (0.6)
+
+This section supersedes the historical SIP.js/bridge and WebRTC rules below.
+The only desktop engine is PJSIP 2.17, accessed through
+`src-tauri/native/pjsua_adapter.c` and `src-tauri/src/pjsip_engine.rs`.
+Do not recreate SIP transactions, RTP sockets, codecs or audio-device streams
+in Rust or TypeScript. The old custom `sip_core` and socket bridge were removed.
+Native ringing uses PJSIP's synthesized tone generator; media uses PJSIP's
+native audio devices and mandatory SDES-SRTP. The React context remains the
+reactive UI boundary. Use Bun for frontend commands, `bun run native:prepare`
+before Rust builds, and `cargo test` plus real Asterisk/media acceptance.
+The alpha supports one account and one active call. See docs/NATIVE_ALPHA.md.
+PJSIP and this alpha use GPL-3.0-or-later with corresponding source distribution.
+
 # AGENTS.md • Autonomous AI Agent Architectural Specification & System Prompts
 
 This document defines the architectural guidelines, design system invariants, protocol specifications, operational protocols, and specialized **System Prompts** for autonomous coding agents developing on the **Daad** softphone codebase.

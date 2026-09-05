@@ -3,7 +3,7 @@ import { Eye, EyeOff, AlertCircle, Server, Shield, FileUp } from 'lucide-react';
 import type { ConnectionState, SipConfig } from '@/types';
 import { CertTrustBadge } from '@/components/CertTrustBadge';
 import { ThemeToggleButton } from '@/components/ThemeToggleButton';
-import { validateCaPem, validateExtension, validateDeviceUsername, usernameFromSipUri } from '@/services/nativeSipClient';
+import { deriveSipUri, validateCaPem, validateExtension, validateDeviceUsername, usernameFromSipUri } from '@/services/nativeSipClient';
 import type { CertTrustStatus } from '@/types';
 
 interface ProvisioningViewProps {
@@ -12,6 +12,7 @@ interface ProvisioningViewProps {
   connectionError: string | null;
   certStatus: CertTrustStatus;
   onProvision: (config: SipConfig) => Promise<void>;
+  onBack?: () => void;
 }
 
 function failureTitle(state: ConnectionState): string {
@@ -48,6 +49,7 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
   connectionError,
   certStatus,
   onProvision,
+  onBack,
 }) => {
   const [formData, setFormData] = useState<SipConfig>({ ...initialConfig });
   const [customCaPem, setCustomCaPem] = useState<string>(initialConfig.customCaPem || '');
@@ -60,6 +62,7 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
   const [busy, setBusy] = useState(false);
   const [appVersion, setAppVersion] = useState('dev');
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const customUri = useRef(Boolean(initialConfig.sipUri && initialConfig.sipUri !== deriveSipUri(initialConfig.serverUrl, initialConfig.username)));
 
   // Build marker for triage (which binary is running). Never blocks render.
   useEffect(() => {
@@ -87,8 +90,12 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
   };
 
   const handleChange = (field: keyof SipConfig, value: string) => {
+    if (field === 'sipUri') customUri.current = true;
     setFormData((prev) => {
       const next = { ...prev, [field]: value };
+      if (!customUri.current && (field === 'serverUrl' || field === 'username')) {
+        next.sipUri = deriveSipUri(next.serverUrl, next.username);
+      }
       // Auto-derive the device username from the SIP URI while the user
       // hasn't typed a custom one.
       if (field === 'sipUri' && !prev.username.trim()) {
@@ -108,7 +115,7 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
     if (field === 'username' || field === 'sipUri') {
       const cur = field === 'sipUri' ? value : formData.sipUri;
       const usr = field === 'username' ? value : formData.username;
-      setUriMatchError(checkUriMatch(cur, usr));
+      setUriMatchError(customUri.current ? checkUriMatch(cur, usr) : null);
     }
   };
 
@@ -153,7 +160,9 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
     setBusy(true);
     try {
       // Secrets (password + CA PEM) are sent once via IPC and never logged.
-      await onProvision({ ...formData, customCaPem: customCaPem.trim() || undefined });
+      await onProvision({ ...formData, sipUri: formData.sipUri || deriveSipUri(formData.serverUrl, formData.username), customCaPem: customCaPem.trim() || undefined });
+    } catch {
+      // The context supplies the actionable connection error in the form.
     } finally {
       setBusy(false);
       // Clear transient secrets from the webview immediately after handoff.
@@ -175,19 +184,20 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
   const certPending = certStatus === 'unknown' && CERT_PENDING_STATES.includes(connectionState);
 
   return (
-    <div className="flex flex-col h-full p-5 overflow-y-auto bg-[#090a0f] text-zinc-200 select-none relative">
+    <div className="flex flex-col h-full p-5 overflow-y-auto bg-[var(--surface-1)] text-[var(--fg-1)] select-none relative">
+      {onBack && <button type="button" onClick={onBack} className="absolute top-3 left-3 text-xs text-[var(--fg-3)]">Back</button>}
       <div className="absolute top-3 right-3">
         <ThemeToggleButton />
       </div>
       <div className="flex flex-col items-center pt-3 pb-2">
-        <h1 className="text-lg font-semibold tracking-tight">Provision SIP account</h1>
-        <p className="text-[12px] text-zinc-500 mt-0.5 font-mono">
-          Secrets go to the native vault only — never localStorage
+        <h1 className="text-lg font-semibold tracking-tight">Connect your phone</h1>
+        <p className="text-[12px] text-[var(--fg-3)] mt-0.5 font-mono">
+          Sign in once with your SIP account
         </p>
         <div className="mt-2 flex items-center gap-2">
           <CertTrustBadge status={certStatus} />
           {certPending && (
-            <span data-testid="cert-pending" className="text-[10px] font-mono text-amber-300">
+            <span data-testid="cert-pending" className="text-[10px] font-mono text-[var(--warning-fg)]">
               Cert pending verification…
             </span>
           )}
@@ -198,12 +208,12 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
         {showFailure && (
           <div
             role="alert"
-            className="p-2.5 rounded-lg bg-[#0c0e15] border border-white/[0.08] text-[12px] flex items-start gap-2"
+            className="p-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[12px] flex items-start gap-2"
           >
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-[var(--danger-fg)]" />
             <div className="min-w-0">
-              <span className="font-semibold block text-zinc-100">{failureTitle(connectionState)}</span>
-              <span className="leading-tight text-zinc-400 font-mono">{connectionError}</span>
+              <span className="font-semibold block text-[var(--fg-1)]">{failureTitle(connectionState)}</span>
+              <span className="leading-tight text-[var(--fg-3)] font-mono">{connectionError}</span>
             </div>
           </div>
         )}
@@ -214,7 +224,7 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
           connectionState === 'Registering') && (
           <div
             data-testid="provisioning-progress"
-            className="p-2.5 rounded-lg bg-[#0c0e15] border border-white/[0.08] text-[12px] text-zinc-300 font-mono"
+            className="p-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[12px] text-[var(--fg-2)] font-mono"
           >
             {connectionState === 'NetworkConnected' && 'Network connected — verifying TLS…'}
             {connectionState === 'TlsVerified' && 'TLS verified — registering…'}
@@ -225,7 +235,7 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
 
         <div>
           <label className="block text-[12px] font-medium mb-1 flex items-center gap-1">
-            <Server className="w-3.5 h-3.5 text-zinc-500" />
+            <Server className="w-3.5 h-3.5 text-[var(--fg-3)]" />
             <span>Server</span>
           </label>
           <input
@@ -235,28 +245,11 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
             value={formData.serverUrl}
             onChange={(e) => handleChange('serverUrl', e.target.value)}
             placeholder="tls://pbx.example.com:5061"
-            className="w-full px-3 py-2 rounded-lg bg-[#0c0e15] border border-white/[0.08] text-[12px] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-white/20"
+            className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[12px] font-mono placeholder:text-[var(--fg-3)] focus:outline-none focus:border-[var(--accent)]"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block text-[12px] font-medium mb-1">Extension (optional)</label>
-            <input
-              type="text"
-              aria-label="Extension"
-              value={formData.extension || ''}
-              onChange={(e) => handleChange('extension', e.target.value)}
-              placeholder="2001"
-              inputMode="numeric"
-              className="w-full px-3 py-2 rounded-lg bg-[#0c0e15] border border-white/[0.08] text-[12px] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-white/20"
-            />
-            {extError && (
-              <p role="alert" className="mt-1 text-[11px] text-rose-400 font-mono">
-                {extError}
-              </p>
-            )}
-          </div>
+        <div className="grid grid-cols-1 gap-2">
           <div>
             <label className="block text-[12px] font-medium mb-1">Device SIP username</label>
             <input
@@ -268,10 +261,10 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
               placeholder="guest-2001"
               autoComplete="off"
               spellCheck={false}
-              className="w-full px-3 py-2 rounded-lg bg-[#0c0e15] border border-white/[0.08] text-[12px] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-white/20"
+              className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[12px] font-mono placeholder:text-[var(--fg-3)] focus:outline-none focus:border-[var(--accent)]"
             />
             {userError && (
-              <p role="alert" className="mt-1 text-[11px] text-rose-400 font-mono">
+              <p role="alert" className="mt-1 text-[11px] text-[var(--danger-fg)] font-mono">
                 {userError}
               </p>
             )}
@@ -290,13 +283,13 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
                 onChange={(e) => handleChange('password', e.target.value)}
                 placeholder="••••••••"
                 autoComplete="off"
-                className="w-full px-3 py-2 pr-9 rounded-lg bg-[#0c0e15] border border-white/[0.08] text-[12px] placeholder:text-zinc-600 focus:outline-none focus:border-white/20"
+                className="w-full px-3 py-2 pr-9 rounded-lg bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[12px] placeholder:text-[var(--fg-3)] focus:outline-none focus:border-[var(--accent)]"
               />
               <button
                 type="button"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-200"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--fg-3)] hover:text-[var(--fg-1)]"
               >
                 {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
@@ -304,9 +297,28 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
           </div>
         </div>
 
+        <details className="space-y-3" open={Boolean(caError || uriMatchError || extError || certStatus === 'failed')}>
+          <summary className="cursor-pointer text-xs text-[var(--fg-3)] py-2">Advanced · certificate and SIP address</summary>
+          <div>
+            <label className="block text-[12px] font-medium mb-1">Extension (optional)</label>
+            <input
+              type="text"
+              aria-label="Extension"
+              value={formData.extension || ''}
+              onChange={(e) => handleChange('extension', e.target.value)}
+              placeholder="2001"
+              inputMode="numeric"
+              className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[12px] font-mono placeholder:text-[var(--fg-3)] focus:outline-none focus:border-[var(--accent)]"
+            />
+            {extError && (
+              <p role="alert" className="mt-1 text-[11px] text-[var(--danger-fg)] font-mono">
+                {extError}
+              </p>
+            )}
+          </div>
         <div>
           <label className="block text-[12px] font-medium mb-1 flex items-center gap-1">
-            <Shield className="w-3.5 h-3.5 text-zinc-500" />
+            <Shield className="w-3.5 h-3.5 text-[var(--fg-3)]" />
             <span>SIP URI</span>
           </label>
           <input
@@ -316,10 +328,10 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
             value={formData.sipUri}
             onChange={(e) => handleChange('sipUri', e.target.value)}
             placeholder="sip:1001@pbx.example.com"
-            className="w-full px-3 py-2 rounded-lg bg-[#0c0e15] border border-white/[0.08] text-[12px] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-white/20"
+            className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[12px] font-mono placeholder:text-[var(--fg-3)] focus:outline-none focus:border-[var(--accent)]"
           />
           {uriMatchError && (
-            <p role="alert" className="mt-1 text-[11px] text-rose-400 font-mono">
+            <p role="alert" className="mt-1 text-[11px] text-[var(--danger-fg)] font-mono">
               {uriMatchError}
             </p>
           )}
@@ -327,7 +339,7 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
 
         <div>
           <label className="block text-[12px] font-medium mb-1 flex items-center gap-1">
-            <Shield className="w-3.5 h-3.5 text-zinc-500" />
+            <Shield className="w-3.5 h-3.5 text-[var(--fg-3)]" />
             <span>Custom CA (PEM, optional)</span>
           </label>
           <textarea
@@ -343,7 +355,7 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
             rows={3}
             spellCheck={false}
             autoComplete="off"
-            className="w-full px-3 py-2 rounded-lg bg-[#0c0e15] border border-white/[0.08] text-[11px] font-mono placeholder:text-zinc-600 focus:outline-none focus:border-white/20 resize-y"
+            className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[11px] font-mono placeholder:text-[var(--fg-3)] focus:outline-none focus:border-[var(--accent)] resize-y"
           />
           <div className="mt-1.5 flex items-center gap-2">
             <input
@@ -360,39 +372,40 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-white/[0.08] bg-[#13151f] text-[11px] font-mono text-zinc-300 hover:text-zinc-100 transition-all active:scale-95"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[var(--stroke-2)] bg-[var(--surface-3)] text-[11px] font-mono text-[var(--fg-2)] hover:text-[var(--fg-1)] transition-all active:scale-95"
             >
               <FileUp className="w-3 h-3" />
               Load CA file
             </button>
             {caFileName && (
-              <span data-testid="ca-file-name" className="text-[10px] font-mono text-zinc-500 truncate">
+              <span data-testid="ca-file-name" className="text-[10px] font-mono text-[var(--fg-3)] truncate">
                 {caFileName}
               </span>
             )}
           </div>
           {caError && (
-            <p role="alert" className="mt-1 text-[11px] text-rose-400 font-mono">
+            <p role="alert" className="mt-1 text-[11px] text-[var(--danger-fg)] font-mono">
               {caError}
             </p>
           )}
-          <p className="mt-1 text-[10px] text-zinc-600 font-mono">
-            Pasted or loaded CA is sent once via IPC and never logged or stored in the webview.
-            Private cores (IP/VPN, self-signed chain) fail closed with “Cert unknown” until their CA is supplied here.
+          <p className="mt-1 text-[10px] text-[var(--fg-3)] font-mono">
+            For a private server, import the CA certificate supplied by your administrator.
           </p>
         </div>
+
+        </details>
 
         <button
           type="submit"
           disabled={isWorking}
-          className="w-full py-2 rounded-lg bg-zinc-100 text-zinc-900 text-[13px] font-semibold transition-all active:scale-95 disabled:opacity-50"
+          className="w-full py-2 rounded-lg bg-[var(--accent)] text-[var(--on-accent)] text-[13px] font-semibold transition-all active:scale-95 disabled:opacity-50"
         >
-          {isWorking ? 'Provisioning…' : 'Provision & Register'}
+          {isWorking ? 'Connecting…' : 'Connect'}
         </button>
-        <p className="text-[10px] text-zinc-600 font-mono text-center">
-          Password and CA are sent to Rust via IPC once and cleared from this form.
+        <p className="text-[10px] text-[var(--fg-3)] font-mono text-center">
+          Your account is saved securely on this device.
         </p>
-        <p data-testid="app-version" className="text-[10px] text-zinc-700 font-mono text-center">
+        <p data-testid="app-version" className="text-[10px] text-[var(--fg-3)] font-mono text-center">
           build {appVersion}
         </p>
       </form>

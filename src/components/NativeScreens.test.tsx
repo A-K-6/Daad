@@ -75,7 +75,7 @@ describe('ProvisioningView', () => {
     fireEvent.change(ca, {
       target: { value: '-----BEGIN CERTIFICATE-----\nABC\n-----END CERTIFICATE-----' },
     });
-    fireEvent.click(screen.getByText('Provision & Register'));
+    fireEvent.click(screen.getByText('Connect'));
     await vi.waitFor(() => expect(onProvision).toHaveBeenCalledTimes(1));
     expect(onProvision).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -99,7 +99,7 @@ describe('ProvisioningView', () => {
     );
     // Fill the required password so native form validation lets submit through.
     fireEvent.change(screen.getByLabelText('SIP Password'), { target: { value: 'pw123' } });
-    fireEvent.click(screen.getByText('Provision & Register'));
+    fireEvent.click(screen.getByText('Connect'));
     expect(screen.getByRole('alert').textContent).toMatch(/numeric/i);
     expect(onProvision).not.toHaveBeenCalled();
   });
@@ -115,16 +115,16 @@ describe('ProvisioningView', () => {
       />,
     );
     fireEvent.change(screen.getByLabelText('SIP Password'), { target: { value: 'pw123' } });
-    fireEvent.click(screen.getByText('Provision & Register'));
+    fireEvent.click(screen.getByText('Connect'));
     expect(onProvision).toHaveBeenCalledTimes(1);
     expect(onProvision).toHaveBeenCalledWith(
       expect.objectContaining({ username: 'guest-2001', extension: '2001' }),
     );
 
     onProvision.mockClear();
-    await vi.waitFor(() => expect(screen.getByText('Provision & Register')).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText('Device SIP username'), { target: { value: 'other-user' } });
-    fireEvent.click(screen.getByText('Provision & Register'));
+    await vi.waitFor(() => expect(screen.getByText('Connect')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('SIP URI'), { target: { value: 'sip:other-user@pbx' } });
+    fireEvent.click(screen.getByText('Connect'));
     expect(screen.getByRole('alert').textContent).toMatch(/must match the device username/i);
     expect(onProvision).not.toHaveBeenCalled();
   });
@@ -165,7 +165,7 @@ describe('ProvisioningView', () => {
       />,
     );
     fireEvent.change(screen.getByLabelText('Custom CA PEM'), { target: { value: 'not-a-cert' } });
-    fireEvent.click(screen.getByText('Provision & Register'));
+    fireEvent.click(screen.getByText('Connect'));
     expect(screen.getByRole('alert').textContent).toMatch(/PEM/);
     expect(onProvision).not.toHaveBeenCalled();
   });

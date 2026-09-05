@@ -1,5 +1,8 @@
 # Telephony Engine Deep Dive • Daad
 
+> Historical SIP.js browser/SDK documentation. The desktop alpha uses PJSIP;
+> see [NATIVE_ALPHA.md](NATIVE_ALPHA.md) for its current engine and test status.
+
 Daad's telephony engine is powered by **SIP.js (v0.21+)** and the standard **WebRTC** API.
 
 ---

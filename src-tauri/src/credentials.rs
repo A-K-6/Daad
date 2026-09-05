@@ -8,8 +8,8 @@
 //! - This module NEVER logs secrets. Error paths carry only the account id
 //!   and the platform error text (which never includes the secret itself).
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+#[cfg(test)]
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 
 /// Keychain-backed credential store contract.
 pub trait CredentialStore: Send + Sync {
@@ -20,16 +20,19 @@ pub trait CredentialStore: Send + Sync {
 
 /// In-memory store for unit tests and non-interactive environments.
 #[derive(Debug, Default, Clone)]
+#[cfg(test)]
 pub struct InMemoryStore {
     inner: Arc<Mutex<HashMap<String, String>>>,
 }
 
+#[cfg(test)]
 impl InMemoryStore {
     pub fn new() -> Self {
         Self::default()
     }
 }
 
+#[cfg(test)]
 impl CredentialStore for InMemoryStore {
     fn store_password(&self, account_id: &str, password: &str) -> Result<(), String> {
         require_account_id(account_id)?;
@@ -74,6 +77,7 @@ impl KeyringStore {
         }
     }
 
+    #[cfg(test)]
     pub fn with_service(service: &str) -> Self {
         Self {
             service: service.to_string(),

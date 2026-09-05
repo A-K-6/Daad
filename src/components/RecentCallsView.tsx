@@ -1,6 +1,7 @@
 import React from 'react';
 import { PhoneIncoming, PhoneOutgoing, PhoneMissed, Phone, Trash2 } from 'lucide-react';
 import { CallRecord } from '@/types';
+import { dialTargetFromIdentity } from '@/services/nativeSipClient';
 
 interface RecentCallsViewProps {
   records: CallRecord[];
@@ -70,7 +71,7 @@ export const RecentCallsView: React.FC<RecentCallsViewProps> = ({
         {records.map((record) => (
           <div
             key={record.id}
-            onClick={() => onCall(record.target)}
+            onClick={() => { const target = dialTargetFromIdentity(record.target); if (target) onCall(target); }}
             className="flex items-center justify-between p-2.5 rounded-md bg-[var(--surface-2)] hover:bg-[var(--surface-4)] border border-[var(--stroke-2)] hover:border-[var(--stroke-1)] cursor-pointer transition-all active:scale-[0.99] group"
           >
             <div className="flex items-center space-x-2.5 min-w-0">
@@ -79,7 +80,7 @@ export const RecentCallsView: React.FC<RecentCallsViewProps> = ({
               </div>
               <div className="min-w-0">
                 <h4 className={`text-sm font-medium truncate ${record.status === 'missed' ? 'text-[var(--danger-fg)]' : 'text-[var(--fg-1)]'}`}>
-                  {record.displayName || record.target}
+                  {dialTargetFromIdentity(record.displayName || record.target) || record.displayName || record.target}
                 </h4>
                 <div className="flex items-center space-x-1.5 text-[11px] text-[var(--fg-3)] font-mono">
                   <span>{formatTimeAgo(record.timestamp)}</span>
@@ -96,10 +97,12 @@ export const RecentCallsView: React.FC<RecentCallsViewProps> = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onCall(record.target);
+                const target = dialTargetFromIdentity(record.target);
+                if (target) onCall(target);
               }}
               className="p-1.5 rounded-md text-[var(--fg-3)] group-hover:text-[var(--accent)] group-hover:bg-[var(--accent-subtle)] transition-colors"
-              title={`Call ${record.target}`}
+              disabled={!dialTargetFromIdentity(record.target)}
+              title={dialTargetFromIdentity(record.target) ? `Call ${dialTargetFromIdentity(record.target)}` : 'No dialable number'}
             >
               <Phone className="w-3.5 h-3.5" />
             </button>

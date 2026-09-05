@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Phone, Delete, Copy, ClipboardPaste, Check, RotateCcw } from 'lucide-react';
 import { soundService, callHistoryService } from '@/services';
-import { validateDialTarget } from '@/services/nativeSipClient';
+import { validateDialTarget, dialTargetFromIdentity } from '@/services/nativeSipClient';
 import { ConnectionState } from '@/types';
 
 interface DialerPadProps {
@@ -94,8 +94,9 @@ export const DialerPad: React.FC<DialerPadProps> = ({
 
   const handleRedial = useCallback(() => {
     const records = callHistoryService.getRecords();
-    if (records.length > 0) {
-      setInputNumber(records[0].target);
+    const target = records.map((record) => dialTargetFromIdentity(record.target)).find(Boolean);
+    if (target) {
+      setInputNumber(target);
       soundService.playDtmf('1');
     }
   }, []);
@@ -173,7 +174,8 @@ export const DialerPad: React.FC<DialerPadProps> = ({
   };
 
   const recentRecords = callHistoryService.getRecords();
-  const hasRecentHistory = recentRecords.length > 0;
+  const recentTarget = recentRecords.map((record) => dialTargetFromIdentity(record.target)).find(Boolean);
+  const hasRecentHistory = Boolean(recentTarget);
 
   return (
     <div className="flex flex-col h-full justify-between px-5 py-3 select-none">
@@ -239,7 +241,7 @@ export const DialerPad: React.FC<DialerPadProps> = ({
                 <button
                   onClick={handleRedial}
                   className="flex items-center space-x-1 px-2 py-0.5 hover:text-[var(--fg-1)] hover:bg-[var(--surface-4)] rounded transition-colors"
-                  title={`Redial ${recentRecords[0].target}`}
+                  title={`Redial ${recentTarget}`}
                 >
                   <RotateCcw className="w-3 h-3" />
                   <span className="text-[10px] font-mono">Redial</span>
@@ -250,12 +252,12 @@ export const DialerPad: React.FC<DialerPadProps> = ({
         </div>
         {dialError && (
           <p role="alert" className="text-[11px] text-rose-400 font-mono text-center mt-1">
-            {dialError} Use 3–8 digits, no leading zero.
+            {dialError}
           </p>
         )}
         {!dialError && inputNumber && (
           <p className="text-[10px] text-zinc-500 font-mono text-center mt-1">
-            Extension format: 3–8 digits, no leading zero
+            Phone number or extension
           </p>
         )}
       </div>
@@ -317,4 +319,3 @@ export const DialerPad: React.FC<DialerPadProps> = ({
     </div>
   );
 };
-

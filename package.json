@@ -1,10 +1,13 @@
 {
   "name": "daad",
   "private": true,
-  "version": "0.5.0-5",
+  "license": "GPL-3.0-or-later",
+  "version": "0.6.0-alpha.1",
   "type": "module",
 
   "scripts": {
+    "native:prepare": "bun scripts/build-native.ts",
+    "test:native": "python3 scripts/test-native.py",
     "dev": "vite",
     "dev:phone": "HTTPS=true vite",
     "typecheck": "tsc --noEmit",

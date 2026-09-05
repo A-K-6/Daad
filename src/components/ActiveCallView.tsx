@@ -17,11 +17,12 @@ import {
 import { CallState, CallInfo, AudioRoute, WaitingCallInfo } from '@/types';
 import { DtmfKeypadModal } from '@/components/DtmfKeypadModal';
 import { audioDeviceService, AudioDevice } from '@/services/audioDeviceService';
-import { validateDialTarget } from '@/services/nativeSipClient';
+import { validateExtension } from '@/services/nativeSipClient';
 
 interface ActiveCallViewProps {
   callState: CallState;
   callInfo: CallInfo | null;
+  simple?: boolean;
   audioRoute?: AudioRoute;
   /** Parked second-leg caller from the native `call_waiting` event. */
   waitingCall?: WaitingCallInfo | null;
@@ -47,6 +48,7 @@ interface ActiveCallViewProps {
 export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
   callState,
   callInfo,
+  simple = false,
   audioRoute = 'system',
   waitingCall = null,
   hasSecondLeg = false,
@@ -130,7 +132,7 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
   const canTransfer = callState === 'Active' || callState === 'Holding';
 
   const runTransfer = async (kind: 'blind' | 'consult') => {
-    const v = validateDialTarget(transferTarget);
+    const v = validateExtension(transferTarget);
     if (!v.ok) {
       setTransferLocalError(v.error);
       return;
@@ -382,7 +384,7 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
           </button>
 
           {/* Transfer Button */}
-          <button
+          {!simple && <button
             onClick={() => {
               setTransferLocalError(null);
               setShowTransfer((prev) => !prev);
@@ -398,7 +400,7 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
           >
             <PhoneForwarded className="w-5 h-5" />
             <span className="text-[10px] font-medium mt-1">Transfer</span>
-          </button>
+          </button>}
 
           {/* Swap Button (only while a waiting/held second leg exists) */}
           {showSwap && (
@@ -423,7 +425,7 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
           </button>
 
           {/* Audio Output Selector Button */}
-          <button
+          {!simple && <button
             onClick={() => setShowAudioMenu((prev) => !prev)}
             title="Audio Devices"
             className={`flex flex-col items-center justify-center h-16 rounded-xl border transition-all active:scale-95 shadow-[var(--shadow-2)] cursor-pointer ${
@@ -434,7 +436,7 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
           >
             <Volume2 className="w-5 h-5" />
             <span className="text-[10px] font-medium mt-1">Audio</span>
-          </button>
+          </button>}
         </div>
 
         {/* Hangup Trigger */}
@@ -559,8 +561,8 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
                   aria-pressed={audioRoute === r}
                   className={`px-2 py-1 rounded-md border text-[11px] font-mono transition-all active:scale-95 ${
                     audioRoute === r
-                      ? 'border-white/25 bg-white/10 text-zinc-100'
-                      : 'border-white/[0.08] text-zinc-400 hover:text-zinc-200'
+                      ? 'border-[var(--accent)] bg-[var(--accent-subtle)] text-[var(--fg-1)]'
+                      : 'border-[var(--stroke-2)] text-[var(--fg-3)] hover:text-[var(--fg-1)]'
                   }`}
                 >
                   {r}
@@ -603,4 +605,3 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
     </div>
   );
 };
-

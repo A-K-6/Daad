@@ -6,7 +6,6 @@ import {
   RecentCallsView,
   ActiveCallView,
   IncomingCallModal,
-  SettingsModal,
   UpdateModal,
   LandingHero,
   ProvisioningView,
@@ -21,13 +20,13 @@ const MainSoftphone: React.FC = () => {
     config,
     connectionState,
     connectionError,
+    callError,
     callState,
     callInfo,
     callHistory,
     hasLoggedIn,
     certStatus,
     audioRoute,
-    connect,
     login,
     logout,
     makeCall,
@@ -74,8 +73,8 @@ const MainSoftphone: React.FC = () => {
 
 
   const handleSaveAndConnect = async (newConfig: SipConfig) => {
+    await login(newConfig);
     setShowSettings(false);
-    await connect(newConfig);
   };
 
   const isIncomingCallRinging = callState === 'Ringing' && callInfo?.direction === 'incoming';
@@ -93,14 +92,15 @@ const MainSoftphone: React.FC = () => {
     connectionState === 'NoReachableContact';
 
   const softphoneWidget = (
-    <div className="flex flex-col h-screen max-h-[600px] w-full max-w-[360px] bg-[#090a0f] text-zinc-200 relative overflow-hidden font-sans select-none rounded-2xl border border-white/[0.08] shadow-[var(--shadow-8)]">
-      {!hasLoggedIn ? (
+    <div className="flex flex-col h-screen max-h-[600px] w-full max-w-[360px] bg-[var(--surface-1)] text-[var(--fg-1)] relative overflow-hidden font-sans select-none rounded-2xl border border-[var(--stroke-2)] shadow-[var(--shadow-8)]">
+      {!hasLoggedIn || showSettings ? (
         <ProvisioningView
           initialConfig={config}
           connectionState={connectionState}
           connectionError={connectionError}
           certStatus={certStatus}
-          onProvision={login}
+          onProvision={handleSaveAndConnect}
+          onBack={hasLoggedIn ? () => setShowSettings(false) : undefined}
         />
       ) : (
         <>
@@ -118,7 +118,7 @@ const MainSoftphone: React.FC = () => {
           {connectionState === 'Reconnecting' && (
             <div
               role="status"
-              className="px-3 py-1.5 bg-[#0c0e15] border-b border-white/[0.08] text-[11px] font-mono text-amber-300 text-center"
+              className="px-3 py-1.5 bg-[var(--surface-2)] border-b border-[var(--stroke-2)] text-[11px] font-mono text-[var(--warning-fg)] text-center"
             >
               Reconnecting — retrying registration…
             </div>
@@ -127,16 +127,22 @@ const MainSoftphone: React.FC = () => {
           {isFailure && connectionError && (
             <div
               role="alert"
-              className="px-3 py-1.5 bg-[#0c0e15] border-b border-white/[0.08] text-[11px] font-mono text-rose-300 text-center"
+              className="px-3 py-1.5 bg-[var(--surface-2)] border-b border-[var(--stroke-2)] text-[11px] font-mono text-[var(--danger-fg)] text-center"
             >
               {connectionState}: {connectionError}
             </div>
           )}
 
           {/* Main Dialer or In-Call Interface */}
-          <main className="flex-1 relative overflow-hidden flex flex-col bg-[#090a0f]">
+          {callError && (
+            <div role="alert" className="px-3 py-2 text-xs text-[var(--danger-fg)] border-b border-[var(--stroke-2)]">
+              {callError}
+            </div>
+          )}
+          <main className="flex-1 relative overflow-hidden flex flex-col bg-[var(--surface-1)]">
             {isCallActiveOrOutgoing ? (
               <ActiveCallView
+                simple
                 callState={callState}
                 callInfo={callInfo}
                 audioRoute={audioRoute}
@@ -159,13 +165,13 @@ const MainSoftphone: React.FC = () => {
             ) : (
               <div className="flex flex-col h-full justify-between">
                 {/* Tab Selector */}
-                <div className="flex p-2 space-x-1 border-b border-white/[0.08]">
+                <div className="flex p-2 space-x-1 border-b border-[var(--stroke-2)]">
                   <button
                     onClick={() => setActiveDialerTab('keypad')}
                     className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 rounded-md text-sm font-medium transition-all active:scale-95 ${
                       activeDialerTab === 'keypad'
-                        ? 'text-zinc-100 bg-[#13151f] border border-white/[0.08]'
-                        : 'text-zinc-500 hover:text-zinc-200'
+                        ? 'text-[var(--fg-1)] bg-[var(--surface-3)] border border-[var(--stroke-2)]'
+                        : 'text-[var(--fg-3)] hover:text-[var(--fg-1)]'
                     }`}
                   >
                     <Phone className="w-4 h-4" />
@@ -175,14 +181,14 @@ const MainSoftphone: React.FC = () => {
                     onClick={() => setActiveDialerTab('history')}
                     className={`flex-1 flex items-center justify-center space-x-1.5 py-1.5 rounded-md text-sm font-medium transition-all active:scale-95 ${
                       activeDialerTab === 'history'
-                        ? 'text-zinc-100 bg-[#13151f] border border-white/[0.08]'
-                        : 'text-zinc-500 hover:text-zinc-200'
+                        ? 'text-[var(--fg-1)] bg-[var(--surface-3)] border border-[var(--stroke-2)]'
+                        : 'text-[var(--fg-3)] hover:text-[var(--fg-1)]'
                     }`}
                   >
                     <Clock className="w-4 h-4" />
                     <span>Recents</span>
                     {callHistory.length > 0 && (
-                      <span className="ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-[#13151f] text-zinc-300 font-mono border border-white/[0.08]">
+                      <span className="ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-[var(--surface-3)] text-[var(--fg-2)] font-mono border border-[var(--stroke-2)]">
                         {callHistory.length}
                       </span>
                     )}
@@ -228,19 +234,6 @@ const MainSoftphone: React.FC = () => {
         />
       )}
 
-      {/* Settings Modal */}
-      {showSettings && (
-        <SettingsModal
-          currentConfig={config}
-          connectionState={connectionState}
-          connectionError={connectionError}
-          onSaveAndConnect={handleSaveAndConnect}
-          onDisconnect={logout}
-          onClose={() => setShowSettings(false)}
-          onOpenUpdates={() => setShowUpdates(true)}
-        />
-      )}
-
       {/* Update Modal */}
       {showUpdates && (
         <UpdateModal
@@ -255,7 +248,7 @@ const MainSoftphone: React.FC = () => {
   // ProvisioningView — so nothing floats over real controls).
   if (isTauri) {
     return (
-      <div className="flex justify-center items-center h-screen w-screen bg-[#090a0f] overflow-hidden">
+      <div className="flex justify-center items-center h-screen w-screen bg-[var(--surface-1)] overflow-hidden">
         {softphoneWidget}
       </div>
     );
@@ -263,7 +256,7 @@ const MainSoftphone: React.FC = () => {
 
   // If on web, render landing showcase page
   return (
-    <div className="min-h-screen w-full bg-[#0c0e15] flex items-center justify-center p-4 lg:p-12 overflow-x-hidden">
+    <div className="min-h-screen w-full bg-[var(--surface-2)] flex items-center justify-center p-4 lg:p-12 overflow-x-hidden">
       <div className="w-full max-w-6xl flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-16">
         <LandingHero />
         <div className="shrink-0 flex items-center justify-center">

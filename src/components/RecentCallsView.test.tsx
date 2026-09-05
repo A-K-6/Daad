@@ -4,6 +4,17 @@ import { RecentCallsView } from './RecentCallsView';
 import { CallRecord } from '@/types';
 
 describe('RecentCallsView Component', () => {
+  it('redials the numeric SIP user and disables non-dialable test callers', () => {
+    const onCall = vi.fn();
+    const base = {direction:'outgoing' as const, status:'answered' as const, duration:2, timestamp:Date.now()};
+    render(<RecentCallsView records={[
+      {...base, id:'numeric', target:'sip:2001@pbx:5061;transport=tls'},
+      {...base, id:'test', target:'"Test" <sip:asterisk@pbx>'},
+    ]} onCall={onCall} onClear={vi.fn()} />);
+    fireEvent.click(screen.getByTitle('Call 2001'));
+    expect(onCall).toHaveBeenCalledWith('2001');
+    expect(screen.getByTitle('No dialable number')).toBeDisabled();
+  });
   const sampleRecords: CallRecord[] = [
     {
       id: '1',

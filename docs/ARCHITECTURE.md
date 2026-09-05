@@ -1,5 +1,9 @@
 # Architecture Overview • Daad
 
+> Historical browser/SDK architecture. For the current native desktop alpha,
+> use [NATIVE_ALPHA.md](NATIVE_ALPHA.md). The desktop no longer uses SIP.js,
+> the socket bridge, or WebRTC media.
+
 Daad is architected as a lightweight, cross-platform desktop softphone application using a decoupled, reactive model across three core layers:
 
 1. **Native Desktop Host (Tauri v2 / Rust)**

@@ -70,6 +70,27 @@ describe('SipContext (native)', () => {
     localStorage.clear();
   });
 
+  it('reconnects using the native saved account without reprovisioning credentials', async () => {
+    const { client, calls } = makeMockClient();
+    let ctx: ReturnType<typeof useSip> | null = null;
+    render(<SipProvider client={client}><Probe onCtx={(c) => { ctx = c; }} /></SipProvider>);
+    await act(async () => { await ctx!.connect(); });
+    expect(calls.filter((c) => c.cmd === 'sip_account_upsert')).toHaveLength(0);
+    expect(calls.some((c) => c.cmd === 'sip_register')).toBe(true);
+    expect(ctx!.connectionState).toBe('Registered');
+  });
+
+  it('rejects an empty password without marking the user logged in', async () => {
+    const { client, calls } = makeMockClient();
+    let ctx: ReturnType<typeof useSip> | null = null;
+    render(<SipProvider client={client}><Probe onCtx={(c) => { ctx = c; }} /></SipProvider>);
+    await act(async () => {
+      await expect(ctx!.login({ serverUrl: 'tls://pbx:5061', sipUri: 'sip:1001@pbx', username: '1001', password: '' })).rejects.toThrow('Password required');
+    });
+    expect(ctx!.hasLoggedIn).toBe(false);
+    expect(calls.some((c) => c.cmd === 'sip_account_upsert' || c.cmd === 'sip_register')).toBe(false);
+  });
+
   it('never persists password to localStorage', async () => {
     const { client } = makeMockClient();
     let ctx: ReturnType<typeof useSip> | null = null;
@@ -211,6 +232,36 @@ describe('SipContext (native)', () => {
     expect(screen.getByTestId('conn')).toHaveTextContent('Registered');
   });
 
+  it('preserves the saved profile when account provisioning fails', async () => {
+    const saved = {serverUrl:'tls://saved:5061', sipUri:'sip:2001@saved', username:'2001'};
+    localStorage.setItem('daad_sip_profile', JSON.stringify(saved));
+    const client = new NativeSipClient({invokeFn: async () => { throw new Error('Vault unavailable'); }, listenFn: () => () => undefined});
+    let ctx: ReturnType<typeof useSip> | null = null;
+    render(<SipProvider client={client}><Probe onCtx={(c) => { ctx = c; }} /></SipProvider>);
+    await act(async () => {
+      await expect(ctx!.connect({serverUrl:'tls://new:5061', sipUri:'sip:1001@new', username:'1001', password:'test'})).rejects.toThrow();
+    });
+    expect(ctx!.config.username).toBe('2001');
+    expect(JSON.parse(localStorage.getItem('daad_sip_profile')!)).toEqual(saved);
+  });
+
+  it('does not claim hold or mute before native confirmation', async () => {
+    const {client, fireCall} = makeMockClient();
+    let ctx: ReturnType<typeof useSip> | null = null;
+    render(<SipProvider client={client}><Probe onCtx={(c) => { ctx = c; }} /></SipProvider>);
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    await act(async () => { fireCall({state:'Active',info:{remoteIdentity:'2001',remoteUri:'sip:2001@pbx',direction:'outgoing',startTime:Date.now(),duration:0,isMuted:false,isHeld:false}} as never); });
+    vi.spyOn(client, 'setHeld').mockRejectedValue(new Error('Hold failed'));
+    vi.spyOn(client, 'setMuted').mockRejectedValue(new Error('Mute failed'));
+    await act(async () => { await ctx!.toggleHold(); });
+    expect(ctx!.callState).toBe('Active');
+    expect(ctx!.callInfo?.isHeld).toBe(false);
+    expect(ctx!.callError).toContain('Hold failed');
+    await act(async () => { ctx!.toggleMute(); });
+    expect(ctx!.callInfo?.isMuted).toBe(false);
+    expect(ctx!.callError).toContain('Mute failed');
+  });
+
   it('rejects invalid dial targets before IPC', async () => {
     const invokeFn = vi.fn(async () => undefined);
     const client = new NativeSipClient({ invokeFn, listenFn: () => () => undefined });
@@ -220,19 +271,30 @@ describe('SipContext (native)', () => {
         <Probe onCtx={(c) => { ctx = c; }} />
       </SipProvider>,
     );
-    await expect(ctx!.makeCall('01')).rejects.toThrow();
-    await expect(ctx!.makeCall('12')).rejects.toThrow();
+    await expect(ctx!.makeCall('sip:1@evil')).rejects.toThrow();
+    await expect(ctx!.makeCall('12\r\nVia: evil')).rejects.toThrow();
     expect(invokeFn).not.toHaveBeenCalled();
   });
 
   it('dialpad blocks invalid numbers with guidance', () => {
     const onCall = vi.fn();
     render(<DialerPad connectionState="Registered" onCall={onCall} onOpenSettings={vi.fn()} />);
-    fireEvent.click(screen.getByText('0'));
+    fireEvent.click(screen.getByText('*'));
     fireEvent.click(screen.getByText('1'));
     fireEvent.click(screen.getByTitle('Initiate Call'));
     expect(onCall).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent('no leading zero');
+    expect(screen.getByRole('alert')).toHaveTextContent('phone number or extension');
+  });
+
+  it('keeps call rejection visible and clears it on a new attempt', async () => {
+    const { client, fireCall } = makeMockClientWithEvents();
+    let ctx: ReturnType<typeof useSip> | null = null;
+    render(<SipProvider client={client}><Probe onCtx={(c) => { ctx = c; }} /></SipProvider>);
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    await act(async () => { fireCall({ type: 'failed', reason: 'PBX could not route the number (SIP 404)', code: 404 } as never); });
+    expect(ctx!.callError).toContain('SIP 404');
+    await act(async () => { await ctx!.makeCall('2001'); });
+    expect(ctx!.callError).toBeNull();
   });
 
   it('exposes waiting/second-leg state from native call events', async () => {
