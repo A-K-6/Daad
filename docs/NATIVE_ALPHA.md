@@ -64,4 +64,5 @@ outgoing call with clear audio in both directions, including the Mac microphone.
 Incoming ringing, speaker audio, and that outgoing call are now verified.
 Final packaged-app mute/hold/resume and restart checks remain separate.
 PSTN testing additionally requires an approved destination and charge approval.
-An alpha binary has been built locally; no release has been published.
+Release packages are unsigned and not notarized. Fresh-install microphone permission
+and packaged mute/hold/resume remain unverified; this is an early-testing prerelease.

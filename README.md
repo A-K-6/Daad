@@ -2,7 +2,7 @@
 
 A small native desktop softphone built with Tauri, React, and PJSIP.
 
-**0.6.0-alpha.1 is under local acceptance testing.** The macOS app has registered
+**0.6.0-alpha.1 is an experimental macOS Apple Silicon prerelease.** The macOS app has registered
 with the configured Asterisk Core over verified TLS. Isolated Asterisk tests
 verify incoming/outgoing encrypted echo audio and cleanup. Live incoming ringing
 and speaker audio were confirmed by the user. After their Core routing fix,

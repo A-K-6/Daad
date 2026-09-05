@@ -2,114 +2,55 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
 
-env:
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
-  NODE_OPTIONS: '--no-deprecation'
-  CARGO_INCREMENTAL: '0'
-  CARGO_TERM_COLOR: always
+permissions:
+  contents: write
 
 jobs:
   release:
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: 'macos-latest'
-            args: '--target aarch64-apple-darwin'
-            rustflags: '-C codegen-units=16 -C split-debuginfo=unpacked'
-          - platform: 'ubuntu-22.04'
-            args: ''
-            rustflags: '-C link-arg=-fuse-ld=mold -C codegen-units=16'
-
-    runs-on: ${{ matrix.platform }}
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js (Latest)
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          bun-version: latest
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-
-      - name: Rust Cache
-        uses: swatinem/rust-cache@v2
+          targets: aarch64-apple-darwin
+      - uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-          cache-on-failure: true
-
-      - name: Install macOS native build tools
-        if: matrix.platform == 'macos-latest'
+      - name: Install native tools
         run: brew install openssl@3 pkg-config
-
-      - name: Install Linux system dependencies & Mold Linker
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev pkg-config build-essential mold clang
-
-      - name: Install Frontend Dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build pinned PJSIP with TLS and SRTP
-        run: bun run native:prepare
-
-      - name: Build Tauri Application
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck && bun run lint && bun run test
+      - run: bun run native:prepare
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - name: Package corresponding source
+        run: python3 scripts/package-source.py
+      - name: Build macOS alpha draft
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUSTFLAGS: ${{ matrix.rustflags }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'Daad Softphone ${{ github.ref_name }}'
-          releaseBody: |
-            ### Daad Softphone Native MVP Alpha ${{ github.ref_name }}
-
-            Native PJSIP SIP/TLS and SDES-SRTP audio (PCMU/PCMA and RFC 4733).
-            Configure the server, username, and password in Daad. The configured Core's existing public CA is included; other private PBXs can import their CA in Advanced settings.
-            See docs/NATIVE_ALPHA.md for verification status and limitations. Windows and mobile packages are not available in this alpha.
-
-            #### Downloads:
-            - **macOS (Apple Silicon):** `Daad_${{ github.ref_name }}_aarch64.dmg`
-            - **Linux (x64):** `Daad_${{ github.ref_name }}_amd64.AppImage` / `.deb`
-            
-            > **macOS Note:** For unsigned open-source binaries, run `xattr -cr /Applications/Daad.app` in Terminal or click *Open Anyway* in System Settings > Privacy & Security.
+          releaseName: 'Daad ${{ github.ref_name }} — macOS native alpha'
+          releaseBody: 'Experimental native softphone. See release notes before installing.'
           releaseDraft: true
           prerelease: true
-          args: ${{ matrix.args }}
-
-  publish:
-    needs: release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js (Latest)
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Publish Release
+          args: '--target aarch64-apple-darwin'
+      - name: Upload source, checksums and publish prerelease
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          echo "Publishing release draft for tag ${{ github.ref_name }}..."
-          gh release edit "${{ github.ref_name }}" --draft=false
+          gh release upload "$RELEASE_TAG" src-tauri/target/release-sources/*.tar.gz
+          mkdir -p src-tauri/target/release-assets
+          gh release download "$RELEASE_TAG" --dir src-tauri/target/release-assets
+          (cd src-tauri/target/release-assets && shasum -a 256 * > SHA256SUMS.txt)
+          gh release upload "$RELEASE_TAG" src-tauri/target/release-assets/SHA256SUMS.txt
+          gh release edit "$RELEASE_TAG" --notes-file docs/RELEASE_NOTES.md --draft=false --prerelease
