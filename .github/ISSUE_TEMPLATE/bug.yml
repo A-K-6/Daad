@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a reproducible problem with the native softphone.
+title: '[Bug]: '
+body:
+  - type: markdown
+    attributes:
+      value: 'Do not include passwords, phone numbers, private addresses, certificates, or raw SIP captures. Use synthetic examples and sanitized diagnostics.'
+  - type: input
+    id: version
+    attributes:
+      label: Daad version and installation method
+      placeholder: '0.6.0-alpha.2, downloaded DMG'
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Operating system and architecture
+      placeholder: 'macOS version, Apple Silicon model'
+    validations:
+      required: true
+  - type: input
+    id: pbx
+    attributes:
+      label: PBX and connection setup
+      description: Product/version, transport, encryption, codecs, and whether a VPN is used. Omit addresses and credentials.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include expected and actual behavior, and whether it happens every time.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized diagnostics or screenshots
+      description: Review every attachment for personal data before posting.

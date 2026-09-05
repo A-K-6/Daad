@@ -66,11 +66,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const handleApplyPreset = (preset: 'tls' | 'tcp' | 'asterisk' | 'freeswitch' | 'demo') => {
     if (preset === 'tls') {
       setFormData({
-        serverUrl: 'tls://10.41.113.71:5061',
-        sipUri: 'sip:host-1001@10.41.113.71',
-        username: 'host-1001',
+        serverUrl: 'tls://pbx.example.com:5061',
+        sipUri: 'sip:1001@pbx.example.com',
+        username: '1001',
         password: '',
-        displayName: 'Host 1001',
+        displayName: 'My phone',
         stunServer: 'stun:stun.l.google.com:19302',
         registerExpires: 600,
       });
@@ -223,7 +223,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             required
             value={formData.serverUrl}
             onChange={(e) => handleChange('serverUrl', e.target.value)}
-            placeholder="tls://10.41.113.71:5061 or 10.41.113.71:5061"
+            placeholder="tls://pbx.example.com:5061 or pbx.example.com:5061"
             appearance="outline"
             contentBefore={<Server className="w-3.5 h-3.5 text-[var(--fg-3)]" />}
             style={{ fontSize: 12, fontFamily: 'var(--font-base)' }}

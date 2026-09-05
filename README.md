@@ -1,91 +1,67 @@
-# Daad • داد
+# Daad · داد
 
-A small native desktop softphone built with Tauri, React, and PJSIP.
+A small open-source native softphone: **one account, one call, a simple keypad.**
+Built with Tauri, React, and PJSIP. GPL-3.0-or-later.
 
-**0.6.0-alpha.1 is an experimental macOS Apple Silicon prerelease.** The macOS app has registered
-with the configured Asterisk Core over verified TLS. Isolated Asterisk tests
-verify incoming/outgoing encrypted echo audio and cleanup. Live incoming ringing
-and speaker audio were confirmed by the user. After their Core routing fix,
-the user also confirmed an outgoing call with clear audio in both directions. See
-[the native alpha notes](docs/NATIVE_ALPHA.md) for evidence and limitations.
+[Download for macOS Apple Silicon](https://github.com/A-K-6/Daad/releases/latest) · [Report a bug](https://github.com/A-K-6/Daad/issues/new/choose) · [Contribute](docs/CONTRIBUTING.md)
 
-## Connect
+![Daad UI walkthrough with synthetic account data; no real calls](docs/media/ui-walkthrough.gif)
 
-Enter your server (for example `tls://pbx.example.com:5061`), SIP username, and
-password. Daad derives the SIP address and saves the account in the operating
-system credential store. It reconnects using that account on subsequent launches.
+*UI preview using real components with synthetic data. This is not a recording of registration or a live call.*
 
-Advanced settings provide a custom SIP address, extension, and CA import. The
-existing public CA for the configured Core is selected automatically; see
-[certificate provenance](src-tauri/certificates/README.md). The app does not
-change PBX configuration or automatically trust arbitrary server certificates.
+## What works—and what needs testers
 
-The desktop audio path uses native devices, PCMU/PCMA, mandatory SDES-SRTP,
-and RFC 4733 DTMF. Use the system sound settings to select the microphone and
-speaker. The compact call screen has answer/reject, mute, hold, keypad, and hangup.
+The desktop engine uses PJSIP 2.17 for SIP/TLS, mandatory SDES-SRTP, PCMU/PCMA audio, and RFC 4733 keypad tones. Account credentials are saved in the OS credential store. The UI provides answer/reject, mute, hold, hangup, recent calls, and light/dark themes. Choose microphone and speaker through system sound settings.
 
-## Develop
+Incoming ringing/audio and outbound two-way calls have been confirmed with Asterisk in development builds. Disposable Asterisk tests cover encrypted echo audio, keypad delivery, credential/certificate rejection, and cleanup. Fresh-install microphone permissions, packaged hold/resume, network recovery, and long-call stability need more testing. See [verification notes](docs/NATIVE_ALPHA.md).
 
-Use Bun for JavaScript dependencies and commands. On macOS, install the Xcode
-command-line tools, Rust, Bun, OpenSSL 3, and pkg-config:
+**This is an unsigned, experimental alpha, not a stable release.** Downloads are for macOS Apple Silicon. Intel Mac, Windows, Linux, and mobile binaries are not offered yet. The website previews the interface; native calling requires the desktop app.
+
+## Install
+
+1. Download the ARM64 DMG and `SHA256SUMS.txt` from the same release. Compare the DMG's `shasum -a 256` output with the checksum file.
+2. Open the DMG and drag Daad into Applications. Fully quit any older Daad process first—closing its window can leave it running in the tray.
+3. Open Daad. It is not Developer ID signed or notarized; macOS may block first launch. After verifying the download, use **System Settings → Privacy & Security → Open Anyway** if offered.
+4. Allow microphone access when prompted. Enter your own SIP account as described below.
+
+## Connect your PBX
+
+You need a SIP account on a PBX supporting TLS and SDES-SRTP, with G.711 enabled. Enter a server such as `tls://pbx.example.com:5061`, your SIP username, and password. Daad derives the SIP address; Advanced settings allow an explicit address, extension, and CA import.
+
+Public builds do not contain organization-specific CA certificates or private host presets. For a private PBX, obtain its public CA certificate from its administrator through a trusted channel and import it in Advanced settings. Daad verifies certificates and does not automatically trust a certificate received from an unverified server. Account-specific CA settings are stored with the account. The app does not change PBX configuration.
+
+If registration fails, check your network/VPN, server name, port, credentials, and certificate. If registration succeeds but calls fail, check the PBX dial plan, codec/encryption settings, and RTP routing. Share only sanitized diagnostics when reporting an issue.
+
+## Help shape the alpha
+
+Try it with your own test PBX and tell us what breaks. [Open a bug or feature request](https://github.com/A-K-6/Daad/issues/new/choose), or pick a small task from [the contributor backlog](docs/COMMUNITY.md#contributor-backlog). Include versions and reproducible steps; never post passwords, real phone numbers, private addresses, or raw SIP captures.
+
+![Daad keypad UI preview with synthetic data](docs/media/keypad.png)
+
+## Build and test
+
+Install Xcode command-line tools, Rust, and Bun on macOS, then:
 
 ```sh
 brew install openssl@3 pkg-config
-bun install
+bun install --frozen-lockfile
 bun run native:prepare
 bun run tauri dev
 ```
-
-`native:prepare` builds the checksum-pinned PJSIP source locally. Cargo does
-not download or build an unpinned telephony engine behind the scenes.
 
 ```sh
 bun run typecheck
 bun run lint
 bun run test
-cargo test --manifest-path src-tauri/Cargo.toml
-bun run tauri build --debug --bundles app
+cargo test --locked --manifest-path src-tauri/Cargo.toml
+bun run tauri build
 ```
 
-The native preparation script supports macOS and Linux. Linux also needs the
-Tauri, ALSA, OpenSSL, and D-Bus development packages. Windows and mobile native
-packaging are not implemented for this alpha. Older published binaries are not
-this native alpha.
+With Docker and native dependencies ready, `bun run test:native` starts a disposable local Asterisk with synthetic credentials and generated audio. It never targets your live PBX. Physical microphone/speaker testing remains separate. See [the contributor guide](docs/CONTRIBUTING.md).
 
-## Verify calls locally
+## Architecture and license
 
-With Docker running and native dependencies prepared:
+React → SipContext → NativeSipClient → Tauri commands → Rust adapter → PJSIP.
+PJSIP owns SIP transactions, registration refresh, codecs, native audio, and RTP/SRTP. The old custom desktop SIP/media stack was removed. Legacy browser/SDK code is separate from this native path.
 
-```sh
-bun run test:native
-```
-
-The test creates a disposable localhost Asterisk with synthetic credentials,
-checks returned tone audio over SRTP, rejects invalid passwords and untrusted
-certificates, and verifies call/registration cleanup. It writes a result to
-`src-tauri/target/native-acceptance.json` and removes the test container. Set
-`DAAD_ASTERISK_IMAGE` to use another locally available Asterisk image.
-
-These tests never target the configured live PBX or dial PSTN numbers. A null
-audio device and generated tone make the network test repeatable; a separate
-physical microphone/speaker test is still necessary.
-
-## Architecture
-
-The desktop path is:
-
-```text
-React views → SipContext → NativeSipClient → Tauri IPC
-    → Rust command thread → PJSUA/PJSIP → SIP/TLS + native SRTP audio
-```
-
-PJSIP owns authentication, transactions, registration refresh, codecs, media
-transport, device I/O, and echo cancellation. Rust owns command serialization,
-secure account storage, and UI events. The former custom SIP/media stack has
-been removed. Legacy browser/SDK code remains in the repository and is separate
-from this desktop engine; older WebRTC guides describe that legacy path.
-
-## License
-
-[GPL-3.0-or-later](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md)
-for the native dependencies and source distribution requirements.
+[GPL-3.0-or-later](LICENSE). Release assets include corresponding source and dependency notices; see [third-party notices](THIRD_PARTY_NOTICES.md). Older releases and Git history retain their original contents, including the former deployment-specific public CA; removing it from current builds does not rewrite history.

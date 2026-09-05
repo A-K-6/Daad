@@ -175,7 +175,7 @@ export const ActiveCallView: React.FC<ActiveCallViewProps> = ({
       <div className="flex items-center justify-between text-[11px] text-[var(--fg-3)] font-mono border-b border-[var(--stroke-2)]/60 pb-2">
         <div className="flex items-center space-x-1">
           <ShieldCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
-          <span>HD Audio • WebRTC</span>
+          <span>{simple ? 'Native audio • SRTP' : 'WebRTC audio'}</span>
         </div>
         <div className="flex items-center space-x-1.5">
           {callState === 'Active' && !isHeld && (

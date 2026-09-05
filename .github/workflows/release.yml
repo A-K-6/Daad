@@ -53,4 +53,4 @@ jobs:
           gh release download "$RELEASE_TAG" --dir src-tauri/target/release-assets
           (cd src-tauri/target/release-assets && shasum -a 256 * > SHA256SUMS.txt)
           gh release upload "$RELEASE_TAG" src-tauri/target/release-assets/SHA256SUMS.txt
-          gh release edit "$RELEASE_TAG" --notes-file docs/RELEASE_NOTES.md --draft=false --prerelease
+          gh release edit "$RELEASE_TAG" --notes-file docs/RELEASE_NOTES.md --draft=false --prerelease=false --latest

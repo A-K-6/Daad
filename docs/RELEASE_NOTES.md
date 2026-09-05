@@ -1,9 +1,10 @@
-First native PJSIP alpha for **macOS Apple Silicon**. This is an experimental prerelease for early testers, not a stable release.
+Community preview of the native PJSIP alpha for **macOS Apple Silicon**. This is an experimental alpha for early testers. It is the latest download, not a stability guarantee.
 
 - Native PJSIP 2.17 replaces the custom desktop SIP/media stack.
 - SIP over verified TLS, mandatory SDES-SRTP, PCMU/PCMA and RFC 4733 keypad tones.
 - One account and one active call, OS credential storage, incoming ringtone, call history, and persistent light/dark themes.
-- Existing configured Core public CA included; other private PBXs can import their CA. No PBX changes are performed by the app.
+- Removed the deployment-specific bundled CA and private host presets. Import your own PBX CA in Advanced settings. Existing account-specific CA settings are retained.
+- Added contributor guidance, issue templates, and a labeled UI walkthrough using synthetic data.
 
 ### Installation
 Download the aarch64 DMG, open it, and drag Daad to Applications. Fully quit any older Daad process before opening the new app; closing its window may leave it running.

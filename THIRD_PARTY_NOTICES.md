@@ -1,6 +1,6 @@
 # Native alpha licensing
 
-Daad 0.6.0-alpha.1 is distributed under GPL-3.0-or-later. See LICENSE.
+Daad 0.6.0-alpha.2 is distributed under GPL-3.0-or-later. See LICENSE.
 Earlier source remains available in Git history under its original terms.
 
 The native engine is PJSIP 2.17 (GPL-2.0-or-later, used under GPLv3), from

@@ -258,7 +258,7 @@ export const ProvisioningView: React.FC<ProvisioningViewProps> = ({
               aria-label="Device SIP username"
               value={formData.username}
               onChange={(e) => handleChange('username', e.target.value)}
-              placeholder="guest-2001"
+              placeholder="1001"
               autoComplete="off"
               spellCheck={false}
               className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--stroke-2)] text-[12px] font-mono placeholder:text-[var(--fg-3)] focus:outline-none focus:border-[var(--accent)]"

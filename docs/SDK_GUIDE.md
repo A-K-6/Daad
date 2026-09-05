@@ -18,9 +18,9 @@ import { createDaadClient } from '@/sdk';
 
 // 1. Initialize client
 const phone = createDaadClient({
-  serverUrl: 'tls://10.41.113.71:5061', // Or 'wss://pbx:8089/ws', 'tcp://pbx:5060'
-  sipUri: 'sip:host-1001@10.41.113.71',
-  username: 'host-1001',
+  serverUrl: 'tls://pbx.example.com:5061', // Or 'wss://pbx:8089/ws', 'tcp://pbx:5060'
+  sipUri: 'sip:1001@pbx.example.com',
+  username: '1001',
   password: 'your_sip_password',
   displayName: 'Support Agent',
 });
@@ -68,9 +68,9 @@ export const MyDashboard: React.FC = () => {
         <DaadPhoneWidget
           autoConnect={true}
           initialConfig={{
-            serverUrl: 'tls://10.41.113.71:5061',
-            sipUri: 'sip:host-1001@10.41.113.71',
-            username: 'host-1001',
+            serverUrl: 'tls://pbx.example.com:5061',
+            sipUri: 'sip:1001@pbx.example.com',
+            username: '1001',
             password: 'secretPassword',
           }}
         />

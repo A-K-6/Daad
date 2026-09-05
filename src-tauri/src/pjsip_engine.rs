@@ -32,11 +32,7 @@ struct Account {
 }
 impl Account {
     fn trusted_ca(&self) -> &str {
-        if self.ca.is_empty() && self.transport == "tls" && self.host == "10.41.113.71" {
-            include_str!("../certificates/neda-core-ca.pem")
-        } else {
-            &self.ca
-        }
+        &self.ca
     }
     fn registrar(&self) -> String {
         let host = if self.host.contains(':') { format!("[{}]", self.host) } else { self.host.clone() };
@@ -403,18 +399,14 @@ mod tests {
         assert_eq!(account.destination("+123456789").unwrap(), "sip:+123456789@[::1]:5061;transport=tls");
     }
     #[test]
-    fn bundled_ca_is_scoped_to_core_and_explicit_ca_takes_precedence() {
-        let mut account = Account { host: "10.41.113.71".into(), port: 5061, transport: "tls".into(),
-            identity: "sip:test@10.41.113.71".into(), username: "test".into(),
+    fn account_trust_is_explicit_and_never_selected_by_host() {
+        let mut account = Account { host: "pbx.example.com".into(), port: 5061, transport: "tls".into(),
+            identity: "sip:test@pbx.example.com".into(), username: "test".into(),
             password: String::new(), ca: String::new(), expires: 600 };
-        assert!(account.trusted_ca().starts_with("-----BEGIN CERTIFICATE-----"));
-        account.host = "other.example.com".into();
         assert!(account.trusted_ca().is_empty());
-        account.host = "10.41.113.71".into();
         account.ca = "explicit CA".into();
         assert_eq!(account.trusted_ca(), "explicit CA");
-        account.ca.clear();
-        account.transport = "tcp".into();
-        assert!(account.trusted_ca().is_empty());
+        let restored: Account = serde_json::from_str(&serde_json::to_string(&account).unwrap()).unwrap();
+        assert_eq!(restored.trusted_ca(), "explicit CA");
     }
 }

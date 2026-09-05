@@ -32,7 +32,7 @@ export async function openExternalUrl(url: string): Promise<void> {
 }
 
 class UpdateService {
-  private currentVersion = '0.6.0-alpha.1';
+  private currentVersion = '0.6.0-alpha.2';
   private repo = 'A-K-6/Daad';
   private status: UpdateStatus = 'idle';
   private updateInfo: UpdateInfo | null = null;

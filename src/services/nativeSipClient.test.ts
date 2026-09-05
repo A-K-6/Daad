@@ -248,8 +248,8 @@ describe('NativeSipClient IPC', () => {
       listenFn: () => () => undefined,
     });
     await client.accountUpsert({
-      serverUrl: 'tls://10.41.113.71:5061',
-      sipUri: 'sip:2001@10.41.113.71',
+      serverUrl: 'tls://pbx.example.com:5061',
+      sipUri: 'sip:2001@pbx.example.com',
       username: '2001',
       password: 'pw',
     });
@@ -257,8 +257,8 @@ describe('NativeSipClient IPC', () => {
     // IPC keys. snake_case keys are rejected with
     // `invalid args 'serverUrl' for command 'sip_account_upsert'`.
     expect(upsertArgs).toMatchObject({
-      serverUrl: 'tls://10.41.113.71:5061',
-      sipUri: 'sip:2001@10.41.113.71',
+      serverUrl: 'tls://pbx.example.com:5061',
+      sipUri: 'sip:2001@pbx.example.com',
       username: '2001',
       password: 'pw',
     });
@@ -276,8 +276,8 @@ describe('NativeSipClient IPC', () => {
       listenFn: () => () => undefined,
     });
     await client.accountUpsert({
-      serverUrl: 'tls://10.41.113.71:5061',
-      sipUri: 'sip:guest-2001@10.41.113.71',
+      serverUrl: 'tls://pbx.example.com:5061',
+      sipUri: 'sip:guest-2001@pbx.example.com',
       username: 'guest-2001',
       extension: '2001',
       password: 'pw',
@@ -290,7 +290,7 @@ describe('NativeSipClient IPC', () => {
     for (const bad of ['', 'sip:2001', '2001@pbx', 'has space', 'bang!']) {
       expect(validateDeviceUsername(bad).ok).toBe(false);
     }
-    expect(usernameFromSipUri('sip:guest-2001@10.41.113.71')).toBe('guest-2001');
+    expect(usernameFromSipUri('sip:guest-2001@pbx.example.com')).toBe('guest-2001');
     expect(usernameFromSipUri('not-a-uri')).toBe('');
   });
 
@@ -322,12 +322,12 @@ describe('sanitizeDiagnostics', () => {
       callState: 'Active',
       certStatus: 'verified',
       audioRoute: 'speaker',
-      serverUrl: 'tls://10.41.113.71:5061',
+      serverUrl: 'tls://192.0.2.10:5061',
       username: '1001',
       contactsReachable: 1,
     });
     const s = JSON.stringify(d);
-    expect(s).not.toContain('10.41.113.71');
+    expect(s).not.toContain('192.0.2.10');
     expect(s).not.toContain('1001');
     expect(s).toContain('Sanitized');
   });
