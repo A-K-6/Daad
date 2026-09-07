@@ -62,6 +62,7 @@ if (spec.os === 'ios' && 'sdk' in spec) {
   config = '#define PJ_CONFIG_IPHONE 1\n#include <pj/config_site_sample.h>\n' + config;
 }
 if (spec.os === 'android' && 'abi' in spec) {
+  await run(['patch', '-p1', '-i', path.join(root, 'scripts/patches/pjsip-2.17-opensl.patch')], source);
   const ndk = process.env.ANDROID_NDK_HOME || process.env.NDK_HOME;
   if (!ndk) throw new Error('Set ANDROID_NDK_HOME to NDK r28 or newer.');
   env.ANDROID_NDK_ROOT = ndk;
@@ -87,6 +88,15 @@ if (spec.os === 'windows' && 'vs' in spec) {
   await writeFile(path.join(source, 'pjlib/include/pj/config_site.h'), config);
   env.INCLUDE = `${sslPrefix}/include;${process.env.INCLUDE || ''}`;
   env.LIB = `${sslPrefix}/lib;${process.env.LIB || ''}`;
+  // Visual Studio projects reset INCLUDE/LIB unless the paths are in MSBuild
+  // properties. Apply them to every native library and to the pjsua link step.
+  const propsPath = path.join(source, 'build/vs/pjproject-vs14-common-config.props');
+  const props = await Bun.file(propsPath).text();
+  const xmlPrefix = sslPrefix.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  await Bun.write(propsPath, props.replace('</Project>', `<ItemDefinitionGroup>
+    <ClCompile><AdditionalIncludeDirectories>${xmlPrefix}/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile>
+    <Link><AdditionalLibraryDirectories>${xmlPrefix}/lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories></Link>
+  </ItemDefinitionGroup></Project>`));
   await run(['msbuild', 'pjproject-vs14.sln', '/m', '/t:pjsua', '/p:Configuration=Release', `/p:Platform=${spec.vs}`, '/p:WindowsTargetPlatformVersion=10.0'], source, env);
   await mkdir(path.join(prefix, 'lib'), { recursive: true });
   for (const folder of ['pjlib', 'pjlib-util', 'pjnath', 'pjmedia', 'pjsip']) {

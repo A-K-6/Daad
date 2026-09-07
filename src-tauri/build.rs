@@ -9,6 +9,7 @@ fn main() {
     native.file("native/pjsua_adapter.c");
     if target.contains("windows-msvc") {
         native.include(format!("{prefix}/include"));
+        native.include(format!("{base}/openssl/include"));
         native.define("PJ_WIN32", "1");
         if target.starts_with("aarch64") { native.define("PJ_M_ARM64", "1"); }
         else { native.define("PJ_WIN64", "1"); native.define("PJ_M_X86_64", "1"); }

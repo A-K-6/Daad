@@ -36,7 +36,7 @@ jobs:
           - runner: windows-2022
             target: aarch64-pc-windows-msvc
             bundles: nsis
-            msvc: amd64_arm64
+            msvc: arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
@@ -51,11 +51,17 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
           key: ${{ matrix.target }}
-      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Configure Visual Studio developer environment
         if: runner.os == 'Windows'
-        with:
-          arch: ${{ matrix.msvc }}
-      - uses: microsoft/setup-msbuild@v2
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products '*' -property installationPath
+          & "$vs\Common7\Tools\Launch-VsDevShell.ps1" -SkipAutomaticLocation -Arch ${{ matrix.msvc }} -HostArch amd64
+          foreach ($name in @('PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'VCToolsInstallDir', 'VSINSTALLDIR', 'WindowsSdkDir', 'WindowsSDKVersion', 'VSCMD_ARG_TGT_ARCH', 'VSCMD_VER')) {
+            $value = [Environment]::GetEnvironmentVariable($name)
+            if ($value) { "$name=$value" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append }
+          }
+      - uses: microsoft/setup-msbuild@v3
         if: runner.os == 'Windows'
       - name: Linux prerequisites
         if: runner.os == 'Linux'
@@ -66,11 +72,11 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: src-tauri/target/native
-          key: native-${{ matrix.target }}-${{ hashFiles('scripts/build-native.ts', 'scripts/native-targets.ts') }}
+          key: native-${{ matrix.target }}-${{ hashFiles('scripts/build-native.ts', 'scripts/native-targets.ts', 'scripts/patches/*.patch') }}
       - run: bun install --frozen-lockfile
       - run: bun run native:prepare ${{ matrix.target }}
       - name: Rust tests on native runner
-        if: matrix.msvc != 'amd64_arm64'
+        if: matrix.msvc != 'arm64'
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
       - name: Build installer
         run: bun run tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
@@ -121,7 +127,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: src-tauri/target/native
-          key: native-${{ matrix.target }}-${{ hashFiles('scripts/build-native.ts', 'scripts/native-targets.ts') }}
+          key: native-${{ matrix.target }}-${{ hashFiles('scripts/build-native.ts', 'scripts/native-targets.ts', 'scripts/patches/*.patch') }}
       - run: bun install --frozen-lockfile
       - run: bun run native:prepare ${{ matrix.target }}
       - run: bun run tauri android init --ci
@@ -148,7 +154,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: src-tauri/target/native
-          key: native-aarch64-apple-ios-sim-${{ hashFiles('scripts/build-native.ts', 'scripts/native-targets.ts') }}
+          key: native-aarch64-apple-ios-sim-${{ hashFiles('scripts/build-native.ts', 'scripts/native-targets.ts', 'scripts/patches/*.patch') }}
       - run: bun install --frozen-lockfile
       - run: bun run native:prepare aarch64-apple-ios-sim
       - run: bun run tauri ios init --ci --skip-targets-install

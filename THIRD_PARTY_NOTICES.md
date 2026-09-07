@@ -7,7 +7,9 @@ The native engine is PJSIP 2.17 (GPL-2.0-or-later, used under GPLv3), from
 https://github.com/pjsip/pjproject/tree/2.17.
 Its unmodified source archive SHA-256 is
 065fe06c06788d97c35f563796d59f00ce52fe9558a52d7b490a042a966facce.
-The exact build configuration is scripts/build-native.ts. The adapter source
+The exact build configuration is scripts/build-native.ts. Android applies the
+tracked scripts/patches/pjsip-2.17-opensl.patch to declare an existing OpenSL
+error-conversion function before use; no SIP/media logic is replaced. The adapter source
 is src-tauri/native and src-tauri/src/pjsip_engine.rs.
 
 PJSIP includes third-party media libraries with their own notices. Copies

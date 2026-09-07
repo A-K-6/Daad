@@ -1,0 +1,11 @@
+--- a/pjmedia/src/pjmedia-audiodev/opensl_dev.c
++++ b/pjmedia/src/pjmedia-audiodev/opensl_dev.c
+@@ -114,6 +114,8 @@
+ };
+ 
+ /* Factory prototypes */
++pj_status_t opensl_to_pj_error(SLresult code);
++
+ static pj_status_t opensl_init(pjmedia_aud_dev_factory *f);
+ static pj_status_t opensl_destroy(pjmedia_aud_dev_factory *f);
+ static pj_status_t opensl_refresh(pjmedia_aud_dev_factory *f);
