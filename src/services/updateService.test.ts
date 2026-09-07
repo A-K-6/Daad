@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { updateService } from './updateService';
+import { selectReleaseAsset, updateService } from './updateService';
 
 describe('UpdateService', () => {
   beforeEach(() => {
@@ -53,5 +53,28 @@ describe('UpdateService', () => {
     expect(info).not.toBeNull();
     expect(info?.hasUpdate).toBe(false);
     expect(updateService.getStatus()).toBe('up-to-date');
+  });
+});
+
+
+describe('platform release downloads', () => {
+  const assets = ['SHA256SUMS.txt', 'Daad_source.tar.gz', 'Daad_arm64.dmg', 'Daad_x64.dmg',
+    'Daad_arm64-setup.exe', 'Daad_x64-setup.exe', 'Daad_arm64.AppImage', 'Daad_amd64.deb',
+    'app-arm64-v8a-debug.apk'].map(name => ({ name, browser_download_url: `https://example.com/${name}` }));
+  it('selects the actual CPU instead of relying on a MacIntel browser user agent', () => {
+    expect(selectReleaseAsset(assets, { os: 'macos', arch: 'x86_64' })?.name).toBe('Daad_x64.dmg');
+    expect(selectReleaseAsset(assets, { os: 'macos', arch: 'aarch64' })?.name).toBe('Daad_arm64.dmg');
+    expect(selectReleaseAsset(assets, { os: 'windows', arch: 'aarch64' })?.name).toBe('Daad_arm64-setup.exe');
+    expect(selectReleaseAsset(assets, { os: 'linux', arch: 'x86_64' })?.name).toBe('Daad_amd64.deb');
+  });
+  it('never offers desktop binaries to mobile devices', () => {
+    expect(selectReleaseAsset(assets, { os: 'ios', arch: 'aarch64' })).toBeUndefined();
+    expect(selectReleaseAsset(assets, { os: 'android', arch: 'aarch64' })?.name).toBe('app-arm64-v8a-debug.apk');
+    expect(selectReleaseAsset(assets.filter(a => !a.name.endsWith('.apk')), { os: 'android', arch: 'aarch64' })).toBeUndefined();
+  });
+  it('never falls back to source archives, checksum files, or a different CPU', () => {
+    expect(selectReleaseAsset(assets)).toBeUndefined();
+    expect(selectReleaseAsset(assets, { os: 'macos', arch: 'unknown' })).toBeUndefined();
+    expect(selectReleaseAsset(assets, { os: 'windows', arch: 'arm' })).toBeUndefined();
   });
 });

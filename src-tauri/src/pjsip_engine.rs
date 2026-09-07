@@ -386,7 +386,7 @@ pub fn run() {
         .plugin(tauri_plugin_mobile::init())
         .invoke_handler(tauri::generate_handler![sip_account_upsert, sip_account_remove, sip_register,
             sip_unregister, sip_status, sip_call_invite, sip_call_answer, sip_call_reject, sip_call_hangup,
-            sip_call_mute, sip_call_hold, sip_call_dtmf, sip_audio_route, sip_diagnostics_export, crate::open_url])
+            sip_call_mute, sip_call_hold, sip_call_dtmf, sip_audio_route, sip_diagnostics_export, crate::open_url, crate::runtime_platform])
         .setup(|app| {
             #[cfg(target_os = "android")]
             keyring_core::set_default_store(android_native_keyring_store::AndroidStore::from_ndk_context()?);

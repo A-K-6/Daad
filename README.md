@@ -3,7 +3,7 @@
 A small open-source native softphone: **one account, one call, a simple keypad.**
 Built with Tauri, React, and PJSIP. GPL-3.0-or-later.
 
-[Download for macOS Apple Silicon](https://github.com/A-K-6/Daad/releases/latest) · [Report a bug](https://github.com/A-K-6/Daad/issues/new/choose) · [Contribute](docs/CONTRIBUTING.md)
+[Downloads](https://github.com/A-K-6/Daad/releases) · [Platform builds](docs/PLATFORMS.md) · [Report a bug](https://github.com/A-K-6/Daad/issues/new/choose) · [Contribute](docs/CONTRIBUTING.md)
 
 ![Daad UI walkthrough with synthetic account data; no real calls](docs/media/ui-walkthrough.gif)
 
@@ -15,7 +15,7 @@ The desktop engine uses PJSIP 2.17 for SIP/TLS, mandatory SDES-SRTP, PCMU/PCMA a
 
 Incoming ringing/audio and outbound two-way calls have been confirmed with Asterisk in development builds. Disposable Asterisk tests cover encrypted echo audio, keypad delivery, credential/certificate rejection, and cleanup. Fresh-install microphone permissions, packaged hold/resume, network recovery, and long-call stability need more testing. See [verification notes](docs/NATIVE_ALPHA.md).
 
-**This is an unsigned, experimental alpha, not a stable release.** Downloads are for macOS Apple Silicon. Intel Mac, Windows, Linux, and mobile binaries are not offered yet. The website previews the interface; native calling requires the desktop app.
+**This is an unsigned, experimental alpha, not a stable release.** The existing published release is for macOS Apple Silicon. The platform build pipeline now covers Intel Mac, Windows x64/ARM64, Linux x64/ARM64, Android and iOS. See [platform status and build instructions](docs/PLATFORMS.md); CI artifacts are not proof of device acceptance. The website previews the interface; native calling requires the desktop app.
 
 ## Install
 

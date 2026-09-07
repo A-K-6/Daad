@@ -112,7 +112,10 @@ jobs:
       - name: Install native tools
         run: |
           sudo apt-get update && sudo apt-get install -y pkg-config
-          sdkmanager 'ndk;28.2.13676358' 'platforms;android-36' 'build-tools;36.0.0'
+          sdkmanager=$(find "${ANDROID_HOME:?}/cmdline-tools" -type f -path '*/bin/sdkmanager' -print -quit)
+          test -n "$sdkmanager"
+          echo "$(dirname "$sdkmanager")" >> "$GITHUB_PATH"
+          "$sdkmanager" 'ndk;28.2.13676358' 'platforms;android-36' 'build-tools;36.0.0'
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
           echo "NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
       - uses: actions/cache@v6

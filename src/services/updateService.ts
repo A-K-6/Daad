@@ -31,6 +31,33 @@ export async function openExternalUrl(url: string): Promise<void> {
   }
 }
 
+export interface ReleaseAsset { name?: string; browser_download_url?: string }
+export interface RuntimePlatform { os: string; arch: string }
+
+/** Unknown CPUs and iPhones go to the release page, never an arbitrary binary. */
+export function selectReleaseAsset(assets: ReleaseAsset[], platform?: RuntimePlatform): ReleaseAsset | undefined {
+  if (!platform || platform.os === 'ios') return undefined;
+  const cpu = {
+    aarch64: /(?:^|[_.-])(?:aarch64|arm64)(?:[_.-]|$)/i,
+    x86_64: /(?:^|[_.-])(?:x86_64|x64|amd64)(?:[_.-]|$)/i,
+    arm: /(?:^|[_.-])(?:armv7|armeabi-v7a)(?:[_.-]|$)/i,
+  }[platform.arch];
+  if (!cpu) return undefined;
+  const extensions: Record<string, string[]> = {
+    macos: ['.dmg', '.pkg'], windows: ['-setup.exe', '.exe', '.msi'],
+    linux: ['.appimage', '.deb', '.rpm'], android: ['.apk'],
+  };
+  for (const extension of extensions[platform.os] || []) {
+    const match = assets.find(asset => {
+      const name = (asset.name || '').toLowerCase();
+      return name.endsWith(extension) && !!asset.browser_download_url &&
+        (cpu.test(name) || (platform.os === 'macos' && /(?:^|[_.-])universal(?:[_.-]|$)/.test(name)));
+    });
+    if (match) return match;
+  }
+  return undefined;
+}
+
 class UpdateService {
   private currentVersion = '0.6.0-alpha.2';
   private repo = 'A-K-6/Daad';
@@ -77,8 +104,21 @@ class UpdateService {
     try {
       let releaseData: any = null;
 
+      // Alpha users follow published prereleases as well as stable releases.
+      if (this.currentVersion.includes('-')) {
+        try {
+          const response = await fetch(`https://api.github.com/repos/${this.repo}/releases`, {
+            headers: { Accept: 'application/vnd.github.v3+json' },
+          });
+          if (response.ok) {
+            const releases = await response.json();
+            if (Array.isArray(releases)) releaseData = releases.find(release => !release.draft);
+          }
+        } catch { /* Try the stable endpoint below. */ }
+      }
+
       // 1. Try /releases/latest endpoint
-      try {
+      if (!releaseData) try {
         const latestRes = await fetch(`https://api.github.com/repos/${this.repo}/releases/latest`, {
           headers: { Accept: 'application/vnd.github.v3+json' },
         });
@@ -129,33 +169,14 @@ class UpdateService {
       const latestTag = (releaseData.tag_name || '').replace(/^v/, '');
       const hasUpdate = this.compareVersions(latestTag, this.currentVersion) > 0;
 
-      // Match platform download asset with exact priority
-      const assets = releaseData.assets || [];
-      const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-      const isMac = /Mac|iPhone|iPad/i.test(userAgent);
-      const isWindows = /Win/i.test(userAgent);
-
-      let matchedAsset: any = null;
-      if (isMac) {
-        matchedAsset =
-          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.dmg')) ||
-          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.pkg')) ||
-          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.app.tar.gz'));
-      } else if (isWindows) {
-        matchedAsset =
-          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('-setup.exe')) ||
-          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.exe')) ||
-          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.msi'));
-      } else {
-        matchedAsset =
-          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.appimage')) ||
-          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.deb')) ||
-          assets.find((a: any) => (a?.name || '').toLowerCase().endsWith('.rpm'));
+      let platform: RuntimePlatform | undefined;
+      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          platform = await invoke<RuntimePlatform>('runtime_platform');
+        } catch { /* The release page remains safe when platform detection fails. */ }
       }
-
-      if (!matchedAsset && assets.length > 0) {
-        matchedAsset = assets[0];
-      }
+      const matchedAsset = selectReleaseAsset(releaseData.assets || [], platform);
 
       this.updateInfo = {
         currentVersion: this.currentVersion,

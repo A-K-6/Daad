@@ -24,5 +24,10 @@ async fn open_url(_app: tauri::AppHandle, url: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn runtime_platform() -> serde_json::Value {
+    serde_json::json!({"os": std::env::consts::OS, "arch": std::env::consts::ARCH})
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() { pjsip_engine::run(); }
