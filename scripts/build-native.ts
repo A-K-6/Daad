@@ -72,7 +72,8 @@ if (spec.os === 'android' && 'abi' in spec) {
   env.CFLAGS = '-fPIC';
   env.LDFLAGS = '-Wl,-z,max-page-size=16384';
   configure = './configure-android';
-  extra.push('--use-ndk-cflags');
+  // NDK >=17 already enables its CFLAGS; the wrapper only consumes this flag
+  // in argument position one, so do not forward it to autoconf.
   config = '#define PJ_CONFIG_ANDROID 1\n#include <pj/config_site_sample.h>\n#undef PJMEDIA_AUDIO_DEV_HAS_ANDROID_JNI\n#define PJMEDIA_AUDIO_DEV_HAS_ANDROID_JNI 0\n#undef PJMEDIA_AUDIO_DEV_HAS_OPENSL\n#define PJMEDIA_AUDIO_DEV_HAS_OPENSL 1\n' + config;
 }
 const sslArgs = ['perl', 'Configure', spec.ssl, `--prefix=${sslPrefix}`, '--libdir=lib', 'no-shared', 'no-tests', 'no-module', 'no-asm'];

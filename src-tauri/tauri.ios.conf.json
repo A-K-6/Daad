@@ -1,5 +1,5 @@
 {
   "bundle": {
-    "iOS": { "minimumSystemVersion": "14.0", "infoPlist": "Info.ios.plist" }
+    "iOS": { "minimumSystemVersion": "14.0", "bundleVersion": "6002", "infoPlist": "Info.ios.plist" }
   }
 }
