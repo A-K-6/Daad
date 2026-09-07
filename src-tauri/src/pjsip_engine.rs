@@ -4,6 +4,7 @@ use std::{ffi::{c_char, c_int, c_void, CStr, CString}, sync::{mpsc, Arc, Mutex},
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{Emitter, Manager, State};
+use tauri_plugin_mobile::MobileExt;
 use crate::credentials::{CredentialStore, KeyringStore};
 
 #[repr(C)]
@@ -32,7 +33,7 @@ struct Account {
 }
 impl Account {
     fn trusted_ca(&self) -> &str {
-        &self.ca
+        if self.ca.is_empty() { public_roots() } else { &self.ca }
     }
     fn registrar(&self) -> String {
         let host = if self.host.contains(':') { format!("[{}]", self.host) } else { self.host.clone() };
@@ -42,6 +43,26 @@ impl Account {
         validate_target(target)?;
         Ok(self.registrar().replacen("sip:", &format!("sip:{target}@"), 1))
     }
+}
+
+// Static OpenSSL must not depend on CA files in the build machine's prefix.
+// Private PBX trust remains an explicit per-account override.
+fn public_roots() -> &'static str {
+    use base64::Engine as _;
+    static ROOTS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    ROOTS.get_or_init(|| {
+        let mut pem = String::new();
+        for certificate in webpki_root_certs::TLS_SERVER_ROOT_CERTS {
+            pem.push_str("-----BEGIN CERTIFICATE-----\n");
+            let encoded = base64::engine::general_purpose::STANDARD.encode(certificate.as_ref());
+            for line in encoded.as_bytes().chunks(64) {
+                pem.push_str(std::str::from_utf8(line).unwrap());
+                pem.push('\n');
+            }
+            pem.push_str("-----END CERTIFICATE-----\n");
+        }
+        pem
+    })
 }
 
 fn validate_target(target: &str) -> Result<(), String> {
@@ -135,6 +156,7 @@ impl Snapshot {
                         "direction":if event.incoming != 0 {"incoming"} else {"outgoing"},
                         "startTime":start,"duration":event.connected_seconds.max(0),"isMuted":muted,"isHeld":false}});
                     if event.incoming != 0 && event.state == 2 {
+                        #[cfg(desktop)]
                         if let Some(window) = app.get_webview_window("main") { let _ = window.show(); let _ = window.unminimize(); let _ = window.set_focus(); }
                     }
                 }
@@ -301,9 +323,14 @@ fn open(account: &Account, context: *mut c_void) -> Result<(), String> {
     setup
 }
 
+async fn prepare_audio(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || app.mobile().prepare_audio()).await.map_err(|_| "Microphone permission request failed".to_string())?
+}
+
 #[tauri::command]
-async fn sip_account_upsert(engine: State<'_, Engine>, server_url: String, sip_uri: String,
+async fn sip_account_upsert(app: tauri::AppHandle, engine: State<'_, Engine>, server_url: String, sip_uri: String,
     username: String, password: String, custom_ca_pem: Option<String>, register_expires: Option<u32>) -> Result<(), String> {
+    prepare_audio(app).await?;
     let (transport, host, port) = crate::parse_server_url(&server_url)?;
     crate::account_config::validate_device_username(&username)?;
     if password.is_empty() { return Err("Password is required to save an account.".into()); }
@@ -317,7 +344,10 @@ async fn sip_account_upsert(engine: State<'_, Engine>, server_url: String, sip_u
         username, password, ca, expires: register_expires.unwrap_or(600).clamp(60, 3600) })).await
 }
 #[tauri::command]
-async fn sip_register(engine: State<'_, Engine>) -> Result<(), String> { engine.request(Op::Register).await }
+async fn sip_register(app: tauri::AppHandle, engine: State<'_, Engine>) -> Result<(), String> {
+    prepare_audio(app).await?;
+    engine.request(Op::Register).await
+}
 #[tauri::command]
 async fn sip_unregister(engine: State<'_, Engine>) -> Result<(), String> { engine.request(Op::Unregister).await }
 #[tauri::command]
@@ -349,14 +379,20 @@ fn sip_diagnostics_export(engine: State<'_, Engine>) -> Value {
 }
 
 pub fn run() {
+    #[cfg(desktop)]
     use tauri::{menu::{Menu, MenuItem}, tray::TrayIconBuilder};
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_mobile::init())
         .invoke_handler(tauri::generate_handler![sip_account_upsert, sip_account_remove, sip_register,
             sip_unregister, sip_status, sip_call_invite, sip_call_answer, sip_call_reject, sip_call_hangup,
             sip_call_mute, sip_call_hold, sip_call_dtmf, sip_audio_route, sip_diagnostics_export, crate::open_url])
         .setup(|app| {
+            #[cfg(target_os = "android")]
+            keyring_core::set_default_store(android_native_keyring_store::AndroidStore::from_ndk_context()?);
             app.manage(Engine::start(app.handle().clone()));
+            #[cfg(desktop)]
+            {
             let show = MenuItem::with_id(app, "show", "Show Daad", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
@@ -370,10 +406,14 @@ pub fn run() {
                         _ => {}
                     }).build(app)?;
             }
+            }
             Ok(())
         })
-        .on_window_event(|window, event| if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-            api.prevent_close(); let _ = window.hide();
+        .on_window_event(|_window, _event| {
+            #[cfg(desktop)]
+            if let tauri::WindowEvent::CloseRequested { api, .. } = _event {
+            api.prevent_close(); let _ = _window.hide();
+            }
         })
         .build(tauri::generate_context!()).expect("Could not start Daad");
     app.run(|app, event| if let tauri::RunEvent::Exit = event {
@@ -403,7 +443,8 @@ mod tests {
         let mut account = Account { host: "pbx.example.com".into(), port: 5061, transport: "tls".into(),
             identity: "sip:test@pbx.example.com".into(), username: "test".into(),
             password: String::new(), ca: String::new(), expires: 600 };
-        assert!(account.trusted_ca().is_empty());
+        assert!(account.trusted_ca().starts_with("-----BEGIN CERTIFICATE-----"));
+        assert_eq!(account.trusted_ca(), public_roots());
         account.ca = "explicit CA".into();
         assert_eq!(account.trusted_ca(), "explicit CA");
         let restored: Account = serde_json::from_str(&serde_json::to_string(&account).unwrap()).unwrap();

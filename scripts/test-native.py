@@ -8,7 +8,6 @@ import json
 import math
 import os
 from pathlib import Path
-import platform
 import secrets
 import shlex
 import struct
@@ -19,9 +18,8 @@ import time
 import wave
 
 ROOT = Path(__file__).resolve().parents[1]
-system = "darwin" if platform.system() == "Darwin" else "linux"
-arch = "arm64" if platform.machine() in ("arm64", "aarch64") else "x64"
-PREFIX = Path(os.environ.get("DAAD_PJSIP_PREFIX", ROOT / f"src-tauri/target/native/{system}-{arch}/install"))
+host = next(line.split(": ", 1)[1] for line in subprocess.check_output(["rustc", "-vV"], text=True).splitlines() if line.startswith("host: "))
+PREFIX = Path(os.environ.get("DAAD_PJSIP_PREFIX", ROOT / f"src-tauri/target/native/{host}/install"))
 IMAGE = os.environ.get("DAAD_ASTERISK_IMAGE", "andrius/asterisk:20.8")
 NAME = f"daad-native-test-{os.getpid()}"
 

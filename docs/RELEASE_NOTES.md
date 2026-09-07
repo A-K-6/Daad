@@ -1,22 +1,32 @@
-Community preview of the native PJSIP alpha for **macOS Apple Silicon**. This is an experimental alpha for early testers. It is the latest download, not a stability guarantee.
+Native PJSIP alpha for macOS (Apple Silicon and Intel), Windows (x64 and ARM64),
+and Linux (x64 and ARM64). This is experimental software for early testers.
 
-- Native PJSIP 2.17 replaces the custom desktop SIP/media stack.
-- SIP over verified TLS, mandatory SDES-SRTP, PCMU/PCMA and RFC 4733 keypad tones.
-- One account and one active call, OS credential storage, incoming ringtone, call history, and persistent light/dark themes.
-- Removed the deployment-specific bundled CA and private host presets. Import your own PBX CA in Advanced settings. Existing account-specific CA settings are retained.
-- Added contributor guidance, issue templates, and a labeled UI walkthrough using synthetic data.
+- Same PJSIP 2.17 SIP/media engine on all targets; verified TLS and mandatory SDES-SRTP.
+- Target-specific static OpenSSL builds and bundled public TLS roots. Import a private PBX CA explicitly.
+- One account, one call, secure OS credential storage, ringtone and call history.
+- Mobile build integration includes microphone permission and Android Keystore/iOS Keychain.
 
-### Installation
-Download the aarch64 DMG, open it, and drag Daad to Applications. Fully quit any older Daad process before opening the new app; closing its window may leave it running.
+### Downloads
 
-**Unsigned and not notarized:** macOS may block the first launch. After verifying the download, use System Settings → Privacy & Security → Open Anyway if offered. There is no Developer ID signature in this alpha.
+Choose the DMG matching your Mac, the Windows NSIS installer matching your CPU,
+or the Linux Debian package/AppImage matching your CPU. Desktop packages are
+unsigned; macOS packages are not notarized.
 
-### Verification and limitations
-Development builds were tested with real Asterisk incoming ringing/audio and outbound two-way audio. Isolated Asterisk tests also verified encrypted echo audio, keypad delivery, invalid credentials/certificate rejection, and teardown. Theme switching was confirmed in the desktop app.
+Android development APKs and iOS simulator builds are CI test artifacts, not
+public mobile releases. Android release signing and Apple Developer signing,
+plus physical-device acceptance, are still required before mobile distribution.
+A simulator app cannot be installed on an iPhone.
 
-Release CI runs frontend and Rust tests. Those checks do not establish fresh-install microphone permission behavior or packaged mute/hold/resume/audio-after-resume; these remain unverified. Network/VPN recovery and extended call stability need further testing. Use system sound settings to choose audio devices.
+### Verification limits
 
-No Intel Mac, Windows, Linux, or mobile binaries are offered in this release. The browser UI is not the native calling engine. No new live calls were made as part of publishing.
+The original Apple Silicon development build has user-confirmed incoming ringing
+and outgoing two-way audio. Builds/tests on other platforms do not establish
+microphone, permission, mute/hold, network recovery or background-call behavior.
+Keep mobile experiments in the foreground. See docs/PLATFORMS.md for the exact
+build and acceptance requirements.
 
 ### Source and license
-GPL-3.0-or-later. The source asset includes the exact Daad source, vendored Rust dependencies, frontend package distributions, pinned PJSIP and matching OpenSSL source, notices, and build instructions. SHA256SUMS.txt covers the downloadable assets.
+
+GPL-3.0-or-later. The source asset contains exact Daad source, vendored Rust
+sources, frontend package distributions, PJSIP and OpenSSL source, notices and
+build instructions. SHA256SUMS.txt covers every release asset.

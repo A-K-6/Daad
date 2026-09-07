@@ -6,12 +6,19 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  platforms:
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: macos-latest
+    uses: ./.github/workflows/platforms.yml
+
+  publish:
+    needs: platforms
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-14
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,38 +26,24 @@ jobs:
           node-version: 24
       - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-      - name: Install native tools
-        run: brew install openssl@3 pkg-config
+      - run: brew install pkg-config
       - run: bun install --frozen-lockfile
       - run: bun run typecheck && bun run lint && bun run test
-      - run: bun run native:prepare
-      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
-      - name: Package corresponding source
-        run: python3 scripts/package-source.py
-      - name: Build macOS alpha draft
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun run native:prepare aarch64-apple-darwin
+      - run: python3 scripts/package-source.py
+      - uses: actions/download-artifact@v4
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Daad ${{ github.ref_name }} — macOS native alpha'
-          releaseBody: 'Experimental native softphone. See release notes before installing.'
-          releaseDraft: true
-          prerelease: true
-          args: '--target aarch64-apple-darwin'
-      - name: Upload source, checksums and publish prerelease
+          pattern: desktop-*
+          path: release-assets
+          merge-multiple: true
+      - name: Create source-complete desktop prerelease
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release upload "$RELEASE_TAG" src-tauri/target/release-sources/*.tar.gz
-          mkdir -p src-tauri/target/release-assets
-          gh release download "$RELEASE_TAG" --dir src-tauri/target/release-assets
-          (cd src-tauri/target/release-assets && shasum -a 256 * > SHA256SUMS.txt)
-          gh release upload "$RELEASE_TAG" src-tauri/target/release-assets/SHA256SUMS.txt
-          gh release edit "$RELEASE_TAG" --notes-file docs/RELEASE_NOTES.md --draft=false --prerelease=false --latest
+          mkdir -p publish-assets
+          find release-assets -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.deb' -o -name '*.AppImage' \) -exec cp {} publish-assets/ \;
+          cp src-tauri/target/release-sources/*.tar.gz publish-assets/
+          (cd publish-assets && shasum -a 256 * > SHA256SUMS.txt)
+          gh release create "$RELEASE_TAG" publish-assets/* --draft --prerelease --title "Daad $RELEASE_TAG — native alpha" --notes-file docs/RELEASE_NOTES.md
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false

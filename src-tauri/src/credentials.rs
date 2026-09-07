@@ -1,12 +1,17 @@
-//! OS keychain credential store.
-//!
-//! Security contract:
-//! - Passwords live in the platform keychain (macOS Keychain, Windows
-//!   Credential Manager, Linux Secret Service / credential store) via the
-//!   maintained `keyring` crate — never in `localStorage`, logs or debug
-//!   output.
-//! - This module NEVER logs secrets. Error paths carry only the account id
-//!   and the platform error text (which never includes the secret itself).
+#[cfg(target_os = "android")]
+use keyring_core as platform_keyring;
+#[cfg(not(target_os = "android"))]
+use keyring as platform_keyring;
+
+// OS keychain credential store.
+//
+// Security contract:
+// - Passwords live in the platform keychain (macOS Keychain, Windows
+//   Credential Manager, Linux Secret Service / credential store) via the
+//   maintained `keyring` crate — never in `localStorage`, logs or debug
+//   output.
+// - This module NEVER logs secrets. Error paths carry only the account id
+//   and the platform error text (which never includes the secret itself).
 
 #[cfg(test)]
 use std::{collections::HashMap, sync::{Arc, Mutex}};
@@ -84,9 +89,9 @@ impl KeyringStore {
         }
     }
 
-    fn entry(&self, account_id: &str) -> Result<keyring::Entry, String> {
+    fn entry(&self, account_id: &str) -> Result<platform_keyring::Entry, String> {
         require_account_id(account_id)?;
-        keyring::Entry::new(&self.service, account_id)
+        platform_keyring::Entry::new(&self.service, account_id)
             .map_err(|e| format!("keychain entry unavailable for '{account_id}': {e}"))
     }
 }
@@ -109,7 +114,7 @@ impl CredentialStore for KeyringStore {
         let entry = self.entry(account_id)?;
         match entry.get_password() {
             Ok(pw) => Ok(Some(pw)),
-            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(platform_keyring::Error::NoEntry) => Ok(None),
             Err(e) => Err(format!("keychain load failed for '{account_id}': {e}")),
         }
     }
@@ -118,7 +123,7 @@ impl CredentialStore for KeyringStore {
         let entry = self.entry(account_id)?;
         match entry.delete_credential() {
             Ok(()) => Ok(()),
-            Err(keyring::Error::NoEntry) => Ok(()),
+            Err(platform_keyring::Error::NoEntry) => Ok(()),
             Err(e) => Err(format!("keychain delete failed for '{account_id}': {e}")),
         }
     }

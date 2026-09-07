@@ -20,8 +20,9 @@ bun run tauri build --debug --bundles app
 
 `native:prepare` downloads the pinned PJSIP source archive, verifies its hash,
 and builds the native dependencies. See `THIRD_PARTY_NOTICES.md` for licensing
-and source requirements. This preparation script currently supports macOS and
-Linux; Windows and mobile packaging have not been completed for this alpha.
+and source requirements. Target-specific build preparation and CI now cover macOS, Linux, Windows,
+Android and iOS. See [PLATFORMS.md](PLATFORMS.md) for target triples, tooling,
+signing requirements and the distinction between build artifacts and verified releases.
 
 ## Connect
 

@@ -12,7 +12,10 @@ is src-tauri/native and src-tauri/src/pjsip_engine.rs.
 
 PJSIP includes third-party media libraries with their own notices. Copies
 for the built audio dependencies are in licenses/native. OpenSSL is licensed
-under Apache-2.0. React, Tauri and other frontend/Rust dependencies retain
+under Apache-2.0. The bundled OpenSSL version is 3.6.3, source SHA-256
+243a86649cf6f23eeb6a2ff2456e09e5d77dd9018a54d3d96b0c6bdd6ba6c7f1.
+Mozilla public trust roots are supplied by the locked webpki-root-certs crate
+under its MPL-2.0 license; update this dependency with security releases. React, Tauri and other frontend/Rust dependencies retain
 their original licenses; the dependency locks identify their versions.
 
 A binary release must include corresponding Daad source, the pinned PJSIP
