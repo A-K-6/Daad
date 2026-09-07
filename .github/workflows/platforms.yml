@@ -5,7 +5,25 @@ on:
   push:
     branches: ['codex/platforms']
   workflow_dispatch:
+    inputs:
+      android_release:
+        description: Build Android APKs with the configured release key
+        type: boolean
+        default: false
   workflow_call:
+    inputs:
+      android_release:
+        type: boolean
+        default: false
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: false
+      ANDROID_KEYSTORE_PASSWORD:
+        required: false
+      ANDROID_KEY_PASSWORD:
+        required: false
+      ANDROID_KEY_ALIAS:
+        required: false
 
 permissions:
   contents: read
@@ -132,10 +150,26 @@ jobs:
       - run: bun run native:prepare ${{ matrix.target }}
       - run: bun run tauri android init --ci
       - name: Build development APK
+        if: ${{ !inputs.android_release }}
         run: bun run tauri android build --debug --apk --target ${{ matrix.tauri }}
+      - name: Configure release signing
+        if: inputs.android_release
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: bun scripts/configure-android-signing.ts
+      - name: Build signed release APK
+        if: inputs.android_release
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: bun run tauri android build --apk --target ${{ matrix.tauri }}
       - uses: actions/upload-artifact@v7
         with:
-          name: android-development-${{ matrix.target }}
+          name: android-${{ inputs.android_release && 'release' || 'development' }}-${{ matrix.target }}
           if-no-files-found: error
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
 

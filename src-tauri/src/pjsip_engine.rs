@@ -389,7 +389,7 @@ pub fn run() {
             sip_call_mute, sip_call_hold, sip_call_dtmf, sip_audio_route, sip_diagnostics_export, crate::open_url, crate::runtime_platform])
         .setup(|app| {
             #[cfg(target_os = "android")]
-            keyring_core::set_default_store(android_native_keyring_store::AndroidStore::from_ndk_context()?);
+            keyring_core::set_default_store(android_native_keyring_store::Store::new()?);
             app.manage(Engine::start(app.handle().clone()));
             #[cfg(desktop)]
             {

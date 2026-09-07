@@ -12,6 +12,9 @@ jobs:
   platforms:
     if: startsWith(github.ref, 'refs/tags/v')
     uses: ./.github/workflows/platforms.yml
+    with:
+      android_release: true
+    secrets: inherit
 
   publish:
     needs: platforms
@@ -33,16 +36,16 @@ jobs:
       - run: python3 scripts/package-source.py
       - uses: actions/download-artifact@v8
         with:
-          pattern: desktop-*
+          pattern: '*'
           path: release-assets
           merge-multiple: true
-      - name: Create source-complete desktop prerelease
+      - name: Create source-complete prerelease
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           mkdir -p publish-assets
-          find release-assets -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.deb' -o -name '*.AppImage' \) -exec cp {} publish-assets/ \;
+          find release-assets -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.apk' \) -exec cp {} publish-assets/ \;
           cp src-tauri/target/release-sources/*.tar.gz publish-assets/
           (cd publish-assets && shasum -a 256 * > SHA256SUMS.txt)
           gh release create "$RELEASE_TAG" publish-assets/* --draft --prerelease --title "Daad $RELEASE_TAG — native alpha" --notes-file docs/RELEASE_NOTES.md

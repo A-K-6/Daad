@@ -40,3 +40,6 @@ docker/asterisk/captures/*.pcapng
 docker/asterisk/captures/*.log
 !docker/asterisk/captures/*.sanitized.log
 docker/asterisk/.env
+
+# Local Android release signing material (never part of source archives)
+/.keys/
