@@ -60,10 +60,19 @@ jobs:
           workspaces: './src-tauri -> target'
       - if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v3
-      - if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: x64
+          vs-version: '[17.0,18.0)'
+      - if: runner.os == 'Windows'
+        name: Configure Visual Studio x64 tools
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $installation = & $vswhere -latest -products '*' -version '[17.0,18.0)' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$installation) { throw 'Visual Studio 2022 C++ tools are required' }
+          & (Join-Path $installation 'Common7/Tools/Launch-VsDevShell.ps1') -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
+          Get-ChildItem Env: | Where-Object { $_.Name -match '^(PATH|INCLUDE|LIB|LIBPATH|VCINSTALLDIR|VCToolsInstallDir|VSINSTALLDIR|WindowsSdkDir|WindowsSDKVersion|UniversalCRTSdkDir|UCRTVersion|VSCMD_ARG_TGT_ARCH)$' } | ForEach-Object {
+            Add-Content -Path $env:GITHUB_ENV -Value "$($_.Name)=$($_.Value)"
+          }
       - if: runner.os == 'macOS'
         run: brew install openssl@3 pkg-config
       - if: runner.os == 'Linux'
@@ -71,6 +80,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev libssl-dev libdbus-1-dev patchelf pkg-config
       - run: bun install --frozen-lockfile
+      - if: runner.os == 'Windows'
+        uses: actions/cache/restore@v6
+        id: windows-ssl
+        with:
+          path: src-tauri/target/native/win32-x64/openssl
+          key: openssl-3.6.3-windows-x64-md-noasm
       - uses: actions/cache/restore@v6
         id: native
         with:
@@ -78,6 +93,11 @@ jobs:
           key: pjsip-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-native.ts', 'scripts/build-windows.ps1') }}
       - if: steps.native.outputs.cache-hit != 'true'
         run: bun run native:prepare
+      - if: always() && runner.os == 'Windows' && steps.windows-ssl.outputs.cache-hit != 'true' && hashFiles('src-tauri/target/native/win32-x64/openssl/lib/libssl.lib') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: src-tauri/target/native/win32-x64/openssl
+          key: openssl-3.6.3-windows-x64-md-noasm
       - if: steps.native.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:

@@ -539,6 +539,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
   );
 
   const answerCall = useCallback(async () => {
+    setCallError(null);
     try {
       await native.answer();
     } catch (e) {
@@ -547,6 +548,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
   }, [native]);
 
   const rejectCall = useCallback(async () => {
+    setCallError(null);
     try {
       await native.reject();
     } catch (e) {
@@ -555,6 +557,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
   }, [native]);
 
   const hangup = useCallback(async () => {
+    setCallError(null);
     try {
       await native.hangup();
     } catch (e) {
@@ -579,6 +582,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
 
   const sendDTMF = useCallback(
     (tone: string) => {
+      setCallError(null);
       native.sendDtmf(tone).catch((e) => setCallError(nativeCommandError(e)));
     },
     [native],

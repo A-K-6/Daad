@@ -33,7 +33,9 @@ if (!(Test-Path "$ssl/lib/libssl.lib")) {
 $oldCL = $env:CL
 $env:CL = "$oldCL /I`"$ssl/include`""
 try {
-    Run 'msbuild' @("$Source/pjproject-vs14.sln", '/m', '/t:pjsua_lib', '/p:Configuration=Release', '/p:Platform=x64', '/p:BuildToolset=v143', '/p:WindowsTargetPlatformVersion=10.0', '/verbosity:minimal')
+    # The standalone pjsua_lib target has no project references. The upstream
+    # aggregate project builds its complete dependency graph.
+    Run 'msbuild' @("$Source/pjproject-vs14.sln", '/m', '/t:libpjproject', '/p:Configuration=Release', '/p:Platform=x64', '/p:BuildToolset=v143', '/p:WindowsTargetPlatformVersion=10.0', '/verbosity:minimal')
 } finally { $env:CL = $oldCL }
 New-Item -ItemType Directory -Force $Prefix | Out-Null
 $libs = @(Get-ChildItem $Source -Recurse -Filter '*-x64-vc14-Release.lib')

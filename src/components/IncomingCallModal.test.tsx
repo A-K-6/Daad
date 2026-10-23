@@ -14,6 +14,12 @@ describe('IncomingCallModal Component', () => {
     isHeld: false,
   };
 
+  it('keeps answer or decline failures visible inside the incoming-call overlay', () => {
+    render(<IncomingCallModal callInfo={sampleIncomingInfo} error="Microphone unavailable. Check permission." onAnswer={vi.fn()} onDecline={vi.fn()} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Microphone unavailable. Check permission.');
+    expect(screen.getByTitle('Answer Call')).toBeEnabled();
+  });
+
   it('renders caller identity and Incoming Call title', () => {
     render(
       <IncomingCallModal

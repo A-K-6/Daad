@@ -229,6 +229,7 @@ const MainSoftphone: React.FC = () => {
       {isIncomingCallRinging && (
         <IncomingCallModal
           callInfo={callInfo}
+          error={callError}
           onAnswer={answerCall}
           onDecline={rejectCall}
         />
