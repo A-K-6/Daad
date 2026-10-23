@@ -25,7 +25,9 @@ with tempfile.TemporaryDirectory(prefix='daad-source-') as temp:
     subprocess.run(['tar', '-xf', str(archive), '-C', str(stage)], check=True)
     config = run('cargo', 'vendor', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', str(stage / 'vendor'))
     (stage / '.cargo').mkdir(exist_ok=True)
-    (stage / '.cargo/config.toml').write_text(config.replace(str(stage / 'vendor'), 'vendor') + '\n')
+    cargo_config = stage / '.cargo/config.toml'
+    existing = cargo_config.read_text() if cargo_config.exists() else ''
+    cargo_config.write_text(existing + '\n' + config.replace(str(stage / 'vendor'), 'vendor') + '\n')
     deps = stage / 'dependency-sources'
     deps.mkdir()
     pj = root / 'src-tauri/target/native/darwin-arm64/pjproject-2.17.tar.gz'

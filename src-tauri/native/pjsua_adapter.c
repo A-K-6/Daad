@@ -37,6 +37,7 @@ static void emit(int kind, int code, int state, const pjsua_call_info *ci) {
         event.connected_seconds = (int)ci->connect_duration.sec;
         pj_ansi_snprintf(event.remote, sizeof(event.remote), "%.*s",
                          (int)ci->remote_info.slen, ci->remote_info.ptr);
+        event.remote[sizeof(event.remote) - 1] = '\0';
     }
     if (notify) notify(notify_context, &event);
 }
@@ -97,6 +98,8 @@ static void incoming_call(pjsua_acc_id acc, pjsua_call_id id, pjsip_rx_data *rda
     PJ_UNUSED_ARG(acc);
     PJ_UNUSED_ARG(rdata);
     if (active_call != PJSUA_INVALID_ID) {
+        pjsua_call_info busy;
+        if (pjsua_call_get_info(id, &busy) == PJ_SUCCESS) emit(8, 486, 0, &busy);
         pjsua_call_answer(id, 486, NULL, NULL);
         return;
     }

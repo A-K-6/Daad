@@ -206,7 +206,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
             target: done.remoteIdentity,
             displayName: done.remoteIdentity,
             direction: done.direction,
-            status: done.startTime !== null ? 'answered' : 'missed',
+            status: done.endStatus || (done.startTime !== null ? 'answered' : done.direction === 'incoming' ? 'missed' : 'failed'),
             duration,
           });
         } catch {
@@ -252,6 +252,9 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
     (ev: NativeCallEvent) => {
       if (!ev || typeof (ev as { type?: unknown }).type !== 'string') return;
       switch (ev.type) {
+        case 'missed_while_busy':
+          callHistoryService.addRecord({ target: ev.from, displayName: ev.from, direction: 'incoming', status: 'missed', duration: 0 });
+          break;
         case 'call_waiting':
           setWaitingCall({ from: ev.from, callId: ev.call_id });
           break;

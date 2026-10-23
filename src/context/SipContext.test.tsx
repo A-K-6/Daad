@@ -418,6 +418,31 @@ describe('SipContext basic native call handling', () => {
     localStorage.clear();
   });
 
+  it('records an incoming call rejected while busy without replacing the active call', async () => {
+    const { client, fireCall } = makeMockClientWithEvents();
+    let ctx: ReturnType<typeof useSip> | null = null;
+    render(<SipProvider client={client}><Probe onCtx={(value) => { ctx = value; }} /></SipProvider>);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await act(async () => {
+      fireCall({ state: 'Active', info: { remoteIdentity: '2001', remoteUri: 'sip:2001@pbx', direction: 'outgoing', startTime: Date.now(), duration: 1, isMuted: false, isHeld: false } } as never);
+      fireCall({ type: 'missed_while_busy', from: '2002' } as never);
+    });
+    expect(ctx!.callState).toBe('Active');
+    expect(ctx!.callInfo?.remoteIdentity).toBe('2001');
+    expect(ctx!.callHistory.some((record) => record.target === '2002' && record.status === 'missed')).toBe(true);
+  });
+
+  it('uses the native termination outcome rather than labeling every unanswered call missed', async () => {
+    const { client, fireCall } = makeMockClient();
+    let ctx: ReturnType<typeof useSip> | null = null;
+    render(<SipProvider client={client}><Probe onCtx={(value) => { ctx = value; }} /></SipProvider>);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    const info = { remoteIdentity: '2001', remoteUri: 'sip:2001@pbx', direction: 'incoming', startTime: null, duration: 0, isMuted: false, isHeld: false };
+    await act(async () => { fireCall({ state: 'Ringing', info } as never); });
+    await act(async () => { fireCall({ state: 'Idle', info: { ...info, endStatus: 'rejected' } } as never); });
+    expect(ctx!.callHistory[0]?.status).toBe('rejected');
+  });
+
   it('surfaces an immediate native invite failure in callError (awaited dial)', async () => {
     const { client, calls } = makeCommandFailingClient({
       sip_call_invite: 'Call setup failed (SIP 503)',

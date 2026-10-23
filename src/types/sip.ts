@@ -44,6 +44,7 @@ export interface CallInfo {
   duration: number; // in seconds
   isMuted: boolean;
   isHeld: boolean;
+  endStatus?: 'answered' | 'missed' | 'rejected' | 'failed';
 }
 
 export type CertTrustStatus = 'unknown' | 'verified' | 'self-signed' | 'failed' | 'not-applicable';
@@ -96,6 +97,7 @@ export interface TransferRequestedInfo {
  * `tag = "type"`, `snake_case`). Secret-free: extensions + state only.
  */
 export type NativeCallEvent =
+  | { type: 'missed_while_busy'; from: string }
   | { type: 'incoming_ringing'; from: string; call_id: string }
   | { type: 'outgoing_ringing'; to: string; call_id: string }
   | { type: 'active'; call_id: string }

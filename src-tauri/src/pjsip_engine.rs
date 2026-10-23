@@ -78,6 +78,12 @@ fn call_failure_message(code: i32) -> String {
     };
     format!("{reason} (SIP {code})")
 }
+fn end_status(incoming: bool, code: i32, answered: bool) -> &'static str {
+    if answered { "answered" }
+    else if incoming && matches!(code, 486 | 603) { "rejected" }
+    else if incoming { "missed" }
+    else { "failed" }
+}
 
 struct Snapshot { connection: Value, call: Value, tls: bool, enabled: bool }
 impl Default for Snapshot {
@@ -122,6 +128,7 @@ impl Snapshot {
                     // Preserve the final timestamp/duration in the final event for history.
                     if self.call["info"].is_object() {
                         self.call["info"]["duration"] = json!(event.connected_seconds.max(0));
+                        self.call["info"]["endStatus"] = json!(end_status(event.incoming != 0, event.code, self.call["info"]["startTime"].is_number()));
                     }
                     self.call["state"] = json!("Idle");
                     let _ = app.emit("sip://call-state", &self.call);
@@ -177,6 +184,10 @@ impl Snapshot {
                 self.connection["reconnecting"] = json!(self.enabled && event.state == 0);
                 if event.state == 0 { self.connection["registered"] = json!(false); }
                 if event.code != 0 { self.connection["message"] = json!("Network recovery failed. Check your connection and reconnect."); }
+            }
+            8 => {
+                let remote = unsafe { CStr::from_ptr(event.remote.as_ptr()) }.to_string_lossy().to_string();
+                let _ = app.emit("daad-call-event", json!({"type":"missed_while_busy", "from":remote}));
             }
             5 if self.call["info"].is_object() => {
                 let held = event.state == 2 || event.state == 3;
@@ -435,6 +446,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn call_outcomes_distinguish_busy_reject_and_failed_outgoing_calls() {
+        assert_eq!(end_status(false, 486, false), "failed");
+        assert_eq!(end_status(false, 487, false), "failed");
+        assert_eq!(end_status(true, 486, false), "rejected");
+        assert_eq!(end_status(true, 487, false), "missed");
+        assert_eq!(end_status(true, 200, true), "answered");
+    }
     #[test]
     fn phone_numbers_and_extensions_are_supported_without_sip_injection() {
         for target in ["1", "1001", "02112345678", "+982112345678"] { assert!(validate_target(target).is_ok()); }
