@@ -25,7 +25,7 @@ fn main() {
             native.debug(false).opt_level(2).static_crt(false).compile("daad_pjsua_adapter");
             for dir in manifest["search"].as_array().unwrap() { println!("cargo:rustc-link-search=native={}", dir.as_str().unwrap()); }
             for lib in manifest["libraries"].as_array().unwrap() { println!("cargo:rustc-link-lib=static={}", lib.as_str().unwrap()); }
-            for lib in ["ws2_32", "mswsock", "iphlpapi", "winmm", "ole32", "uuid", "secur32", "crypt32", "bcrypt", "advapi32", "user32", "netapi32", "dsound", "dxguid"] {
+            for lib in ["ws2_32", "mswsock", "iphlpapi", "winmm", "ole32", "uuid", "secur32", "crypt32", "bcrypt", "advapi32", "user32", "gdi32", "netapi32", "dsound", "dxguid", "odbc32", "odbccp32"] {
                 println!("cargo:rustc-link-lib={lib}");
             }
         } else {
