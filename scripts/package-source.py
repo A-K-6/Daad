@@ -39,6 +39,11 @@ with tempfile.TemporaryDirectory(prefix='daad-source-') as temp:
     urllib.request.urlretrieve(url + '.sha256', deps / (ssl_name + '.sha256'))
     expected = (deps / (ssl_name + '.sha256')).read_text().split()[0]
     assert hashlib.sha256((deps / ssl_name).read_bytes()).hexdigest() == expected
+    # Android and Windows build this exact source even if Homebrew differs.
+    if ssl_version != '3.6.3':
+        pinned = deps / 'openssl-3.6.3.tar.gz'
+        urllib.request.urlretrieve('https://github.com/openssl/openssl/releases/download/openssl-3.6.3/openssl-3.6.3.tar.gz', pinned)
+        assert hashlib.sha256(pinned.read_bytes()).hexdigest() == '243a86649cf6f23eeb6a2ff2456e09e5d77dd9018a54d3d96b0c6bdd6ba6c7f1'
     (deps / 'openssl-homebrew-formula.json').write_text(run('brew', 'info', '--json=v2', 'openssl@3'))
     # Published npm distributions retain source, source maps, manifests and notices.
     with tarfile.open(deps / 'frontend-packages.tar.gz', 'w:gz') as tar:

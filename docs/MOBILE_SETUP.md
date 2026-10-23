@@ -1,85 +1,38 @@
-# Mobile Setup Guide • iOS & Android • Daad
+# Android setup for Daad 0.7
 
-Daad is engineered on **Tauri v2**, providing first-class native compilation and packaging for both **iOS** and **Android** alongside desktop operating systems.
+The Android app uses the same PJSIP 2.17 C adapter as desktop. The website and
+browser preview are not an Android SIP engine. iOS is excluded from v0.7.0.
 
----
+Install Java 17, Android SDK command-line tools/platforms/build tools, and NDK
+r27 or newer. Set JAVA_HOME, ANDROID_HOME, and NDK_HOME. Install the Rust target
+with `rustup target add aarch64-linux-android`.
 
-## ⚡ Option 1: Instant Mobile Testing (Zero Install)
-
-You can run and test Daad on any physical iPhone or Android device immediately over your local Wi-Fi without compiling native mobile projects:
-
-```bash
-# Start local HTTPS dev server
-bun run dev:phone
-```
-
-1. Look at the terminal output for the local network URL:
-   ```
-   ➜  Network: https://192.168.1.X:1420/
-   ```
-2. Connect your iPhone or Android phone to the same Wi-Fi.
-3. Open the URL in Safari (iOS) or Chrome (Android).
-4. Tap "Allow" for microphone permissions when placing a call.
-
----
-
-## 🍏 Option 2: Native iOS App (Xcode / iPhone / iPad)
-
-### Prerequisites
-- macOS host with **Xcode** (15+) installed (`xcode-select --install`)
-- iOS Simulator or physical iPhone/iPad with Developer Mode enabled
-- Rust iOS targets:
-  ```bash
-  rustup target add aarch64-apple-ios x86_64-apple-ios aarch64-apple-ios-sim
-  ```
-
-### Initialize & Run iOS:
-```bash
-# 1. Initialize Xcode project structure
-bun run ios:init
-
-# 2. Run on iOS Simulator or connected iPhone
-bun run ios:dev
-
-# 3. Build release iOS bundle / IPA
-bun run ios:build
-```
-
----
-
-## 🤖 Option 3: Native Android App (Android Studio / APK / AAB)
-
-### Prerequisites
-- **Android Studio** with Android SDK, NDK, and CMake installed
-- Set environment variables (`~/.zshrc` or `~/.bashrc`):
-  ```bash
-  export ANDROID_HOME="$HOME/Library/Android/sdk"
-  export NDK_HOME="$ANDROID_HOME/ndk/<version>"
-  ```
-- Rust Android targets:
-  ```bash
-  rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
-  ```
-
-### Initialize & Run Android:
-```bash
-# 1. Initialize Android project structure
-bun run android:init
-
-# 2. Run on connected Android device or Emulator
-bun run android:dev
-
-# 3. Build production APK or Google Play App Bundle (AAB)
+```sh
+bun install --frozen-lockfile
+bun run native:prepare --target aarch64-linux-android
+bun run android:prepare
 bun run android:build
 ```
 
----
+The native script builds pinned, hash-verified PJSIP and matching OpenSSL for
+Android. Host libraries are never linked into the APK. Native outputs and Rust
+linking use 16 KB page alignment. `android:prepare` generates the Tauri shell,
+disables backup of device-bound encrypted accounts, and adds environment-based
+release signing. The local Android platform plugin supplies permissions,
+Android Keystore account encryption, system trust roots, and a foreground service.
 
-## 🔒 Mobile Permissions
+For signed builds set DAAD_ANDROID_KEYSTORE to an absolute keystore path and
+provide ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD
+through the environment. Never commit the keystore or secrets. GitHub release
+builds use the repository's existing Android signing secrets; a tagged release
+fails if signing is unavailable.
 
-Daad pre-configures hardware permissions required for telephony:
-- **iOS (`Info.plist`):** `NSMicrophoneUsageDescription`
-- **Android (`AndroidManifest.xml`):**
-  - `android.permission.INTERNET`
-  - `android.permission.RECORD_AUDIO`
-  - `android.permission.MODIFY_AUDIO_SETTINGS`
+Allow microphone and notification permission. Connect while Daad is open so
+Android can start its microphone foreground service. Background incoming-call
+notifications reopen the call UI. Force-stop or process death requires reopening
+Daad; push delivery and Android Telecom/lock-screen integration are not provided.
+Test background/locked-screen audio on actual devices before relying on it.
+
+Artifacts: APK for sideload installation and AAB for a future Play submission.
+Building an AAB does not publish an app to Google Play. Acceptance requirements
+are listed in [RELEASE_0_7.md](RELEASE_0_7.md).

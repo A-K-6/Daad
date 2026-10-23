@@ -10,6 +10,10 @@
 #error "Daad requires SRTP support"
 #endif
 
+#if defined(PJ_ANDROID) && PJ_ANDROID
+void daad_android_set_jvm(void *vm) { pj_jni_set_jvm(vm); }
+#endif
+
 static daad_callback notify;
 static void *notify_context;
 static pjsua_acc_id account = PJSUA_INVALID_ID;
@@ -19,6 +23,8 @@ static pj_pool_t *tone_pool;
 static pjmedia_port *tone_port;
 static pjsua_conf_port_id tone_slot = PJSUA_INVALID_ID;
 static int created, silent_audio, capture_muted;
+static int recovering;
+static pjsip_transport *current_transport;
 
 static void emit(int kind, int code, int state, const pjsua_call_info *ci) {
     daad_event event;
@@ -58,7 +64,15 @@ static void registration_changed(pjsua_acc_id id) {
     pjsua_acc_info info;
     if (pjsua_acc_get_info(id, &info) == PJ_SUCCESS)
         emit(1, info.status, info.expires > 0 &&
-             info.expires != PJSIP_EXPIRES_NOT_SPECIFIED && info.status / 100 == 2, NULL);
+             info.expires != PJSIP_EXPIRES_NOT_SPECIFIED && info.status / 100 == 2 && !recovering, NULL);
+}
+static void ip_change_progress(pjsua_ip_change_op op, pj_status_t status,
+                               const pjsua_ip_change_op_info *info) {
+    PJ_UNUSED_ARG(info);
+    if (op != PJSUA_IP_CHANGE_OP_COMPLETED) return;
+    recovering = 0;
+    emit(7, status, 1, NULL);
+    registration_changed(account);
 }
 
 static void call_changed(pjsua_call_id id, pjsip_event *event) {
@@ -118,6 +132,8 @@ static void media_changed(pjsua_call_id id) {
 
 static void transport_changed(pjsip_transport *tp, pjsip_transport_state state,
                               const pjsip_transport_state_info *info) {
+    if (state == PJSIP_TP_STATE_CONNECTED) current_transport = tp;
+    else if (current_transport && current_transport != tp) return;
     emit(3, info ? info->status : 0, state, NULL);
     if (tp->key.type == PJSIP_TRANSPORT_TLS && info && info->ext_info) {
         const pjsip_tls_state_info *tls = info->ext_info;
@@ -147,6 +163,7 @@ int daad_init(daad_callback callback, void *context, int null_audio) {
     cfg.cb.on_call_media_state = media_changed;
     cfg.cb.on_reg_state = registration_changed;
     cfg.cb.on_transport_state = transport_changed;
+    cfg.cb.on_ip_change_progress = ip_change_progress;
     logs.level = 0;
     logs.console_level = 0;
     logs.msg_logging = PJ_FALSE; /* Never dump SIP credentials or SDP keys. */
@@ -222,6 +239,17 @@ int daad_register(int enabled) {
     if (!enabled) pjsua_call_hangup_all();
     return pjsua_acc_set_registration(account, enabled);
 }
+int daad_network_changed(void) {
+    if (!created || account == PJSUA_INVALID_ID) return PJ_EINVALIDOP;
+    if (recovering) return PJ_SUCCESS;
+    recovering = 1;
+    emit(7, 0, 0, NULL);
+    pjsua_ip_change_param param;
+    pjsua_ip_change_param_default(&param);
+    pj_status_t status = pjsua_handle_ip_change(&param);
+    if (status != PJ_SUCCESS) { recovering = 0; emit(7, status, 1, NULL); }
+    return status;
+}
 int daad_dial(const char *uri) {
     if (active_call != PJSUA_INVALID_ID || account == PJSUA_INVALID_ID) return PJ_EINVALIDOP;
     pj_str_t target = pj_str((char *)uri);
@@ -273,6 +301,8 @@ void daad_destroy(void) {
     created = 0;
     account = active_call = transport_id = PJSUA_INVALID_ID;
     capture_muted = 0;
+    recovering = 0;
+    current_transport = NULL;
 }
 void daad_error(int code, char *buffer, int length) {
     pj_strerror(code, buffer, length);

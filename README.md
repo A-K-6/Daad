@@ -3,7 +3,7 @@
 A small open-source native softphone: **one account, one call, a simple keypad.**
 Built with Tauri, React, and PJSIP. GPL-3.0-or-later.
 
-[Download for macOS Apple Silicon](https://github.com/A-K-6/Daad/releases/latest) · [Report a bug](https://github.com/A-K-6/Daad/issues/new/choose) · [Contribute](docs/CONTRIBUTING.md)
+[Downloads and validation releases](https://github.com/A-K-6/Daad/releases) · [Report a bug](https://github.com/A-K-6/Daad/issues/new/choose) · [Contribute](docs/CONTRIBUTING.md)
 
 ![Daad UI walkthrough with synthetic account data; no real calls](docs/media/ui-walkthrough.gif)
 
@@ -15,14 +15,22 @@ The desktop engine uses PJSIP 2.17 for SIP/TLS, mandatory SDES-SRTP, PCMU/PCMA a
 
 Incoming ringing/audio and outbound two-way calls have been confirmed with Asterisk in development builds. Disposable Asterisk tests cover encrypted echo audio, keypad delivery, credential/certificate rejection, and cleanup. Fresh-install microphone permissions, packaged hold/resume, network recovery, and long-call stability need more testing. See [verification notes](docs/NATIVE_ALPHA.md).
 
-**This is an unsigned, experimental alpha, not a stable release.** Downloads are for macOS Apple Silicon. Intel Mac, Windows, Linux, and mobile binaries are not offered yet. The website previews the interface; native calling requires the desktop app.
+**Version 0.7.0 targets macOS Apple Silicon, Linux x64, Windows x64, and Android arm64 as a validation release.** The release workflow builds DMG, DEB/AppImage, NSIS installer, and signed APK/AAB packages. Every platform build must pass before a tag publishes. See the [acceptance checklist](docs/RELEASE_0_7.md) for the difference between build checks and device verification. iOS is excluded. The website previews the interface; native calling requires the installed app.
 
-## Install
+Desktop packages are currently unsigned/not notarized. Android uses a release signing key and an encrypted account store backed by Android Keystore. See [Android setup and background-call limitations](docs/MOBILE_SETUP.md).
+
+## Install on macOS
 
 1. Download the ARM64 DMG and `SHA256SUMS.txt` from the same release. Compare the DMG's `shasum -a 256` output with the checksum file.
 2. Open the DMG and drag Daad into Applications. Fully quit any older Daad process first—closing its window can leave it running in the tray.
 3. Open Daad. It is not Developer ID signed or notarized; macOS may block first launch. After verifying the download, use **System Settings → Privacy & Security → Open Anyway** if offered.
 4. Allow microphone access when prompted. Enter your own SIP account as described below.
+
+For Linux, install the DEB or make the AppImage executable and launch it from
+your desktop session. For Windows, run the NSIS installer. For Android, install
+the signed APK and grant microphone/notification permission. The AAB is intended
+for a store submission and cannot be installed directly. Availability is tracked
+in the [v0.7 acceptance checklist](docs/RELEASE_0_7.md).
 
 ## Connect your PBX
 

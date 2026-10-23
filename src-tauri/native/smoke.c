@@ -54,6 +54,13 @@ int main(int argc, char **argv) {
     if (check(daad_register(1), "register")) return 1;
     for (int i = 0; i < 1500 && !registered && !failed; ++i) daad_poll(20);
     if (!registered) { fprintf(stderr, "registration did not succeed\n"); daad_destroy(); return 1; }
+    if (getenv("DAAD_TEST_RECOVERY")) {
+        registered = 0;
+        if (check(daad_network_changed(), "network recovery")) return 1;
+        for (int i = 0; i < 1500 && !registered; ++i) daad_poll(20);
+        if (!registered) { fprintf(stderr, "re-registration did not recover\n"); daad_destroy(); return 1; }
+        puts("network recovered=1");
+    }
     if (getenv("DAAD_TEST_RECEIVE")) {
         for (int i = 0; i < 1500 && !incoming; ++i) daad_poll(20);
         if (!incoming || check(daad_answer(), "answer")) { daad_destroy(); return 1; }
@@ -66,6 +73,24 @@ int main(int argc, char **argv) {
     pjsua_call_id calls[2]; unsigned count = 2;
     pjsua_enum_calls(calls, &count);
     if (!count) { daad_destroy(); return 1; }
+    if (getenv("DAAD_TEST_CONTROLS")) {
+        if (check(daad_mute(1), "mute")) return 1;
+        if (check(daad_hold(1), "hold")) return 1;
+        pjsua_call_info held = {0};
+        for (int i = 0; i < 500; ++i) {
+            daad_poll(20);
+            if (pjsua_call_get_info(calls[0], &held) == PJ_SUCCESS && held.media_status == PJSUA_CALL_MEDIA_LOCAL_HOLD) break;
+        }
+        if (held.media_status != PJSUA_CALL_MEDIA_LOCAL_HOLD) { fprintf(stderr, "hold did not complete\n"); daad_destroy(); return 1; }
+        if (check(daad_hold(0), "resume")) return 1;
+        for (int i = 0; i < 500; ++i) {
+            daad_poll(20);
+            if (pjsua_call_get_info(calls[0], &held) == PJ_SUCCESS && held.media_status == PJSUA_CALL_MEDIA_ACTIVE) break;
+        }
+        if (held.media_status != PJSUA_CALL_MEDIA_ACTIVE) { fprintf(stderr, "resume did not complete\n"); daad_destroy(); return 1; }
+        if (check(daad_mute(0), "unmute")) return 1;
+        puts("controls mute_hold_resume=1");
+    }
     pjsua_call_info ci; pjsua_call_get_info(calls[0], &ci);
     pjmedia_transport_info transport_info;
     pjmedia_transport_info_init(&transport_info);

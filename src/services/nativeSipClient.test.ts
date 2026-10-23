@@ -333,6 +333,115 @@ describe('sanitizeDiagnostics', () => {
   });
 });
 
+describe('exportDiagnostics native evidence (bounded allowlist)', () => {
+  type NativeEvidence = {
+    engine: string | null;
+    requiredSrtp: boolean | null;
+    callState: string | null;
+  };
+  /** Diagnostics must carry explicit, bounded native evidence under `native`. */
+  const evidence = (diag: unknown): NativeEvidence | undefined =>
+    (diag as { native?: NativeEvidence }).native;
+
+  function diagClient(nativePayload: unknown | Error) {
+    const client = new NativeSipClient({
+      invokeFn: async (cmd) => {
+        if (cmd === 'sip_diagnostics_export') {
+          if (nativePayload instanceof Error) throw nativePayload;
+          return nativePayload;
+        }
+        return undefined;
+      },
+      listenFn: () => () => undefined,
+    });
+    return client.exportDiagnostics({
+      connectionState: 'Registered',
+      callState: 'Active',
+      certStatus: 'verified',
+      audioRoute: 'system',
+      serverUrl: 'tls://192.0.2.10:5061',
+      username: '1001',
+      contactsReachable: 1,
+    });
+  }
+
+  it('preserves engine, required-SRTP and native call state without native free text', async () => {
+    const diag = await diagClient({
+      engine: 'PJSIP 2.17',
+      srtpRequired: true,
+      callState: 'Active',
+      connection: {
+        registered: true,
+        failureKind: 'none',
+        certStatus: 'verified',
+        // Arbitrary native error text and identities must never be exported.
+        message: 'Registration failed for sip:1004@pbx.example.com (password hunter2)',
+      },
+      call: {
+        state: 'Active',
+        info: { remoteUri: 'sip:1004@pbx.example.com', remoteIdentity: '1004' },
+      },
+      password: 'hunter2',
+      sdp: 'v=0\r\no=- 1 1 IN IP4 203.0.113.9\r\n',
+      error: 'TLS handshake failed for tls://pbx.example.com',
+    });
+
+    const native = evidence(diag);
+    expect(native).toBeDefined();
+    expect(native?.engine).toBe('PJSIP 2.17');
+    expect(native?.requiredSrtp).toBe(true);
+    expect(native?.callState).toBe('Active');
+    // UI-side evidence still comes from the explicit input contract.
+    expect(diag.connectionState).toBe('Registered');
+    expect(diag.callState).toBe('Active');
+
+    const serialized = JSON.stringify(diag);
+    expect(serialized).not.toContain('hunter2');
+    expect(serialized).not.toContain('1004');
+    expect(serialized).not.toContain('pbx.example.com');
+    expect(serialized).not.toContain('203.0.113.9');
+    expect(serialized).not.toContain('TLS handshake failed');
+    expect(serialized).not.toContain('v=0');
+  });
+
+  it('rejects out-of-allowlist native values instead of passing them through', async () => {
+    const diag = await diagClient({
+      // URIs, newlines, injected headers and over-long strings are not evidence.
+      engine: 'PJSIP 2.17 (sip:1004@pbx.example.com)\r\nInjected: 1',
+      srtpRequired: 'yes',
+      callState: 'Active (sip:1004@pbx.example.com)',
+    });
+    const native = evidence(diag);
+    expect(native).toBeDefined();
+    expect(native?.engine).toBeNull();
+    expect(native?.requiredSrtp).toBeNull();
+    expect(native?.callState).toBeNull();
+
+    const longEngine = await diagClient({
+      engine: 'P'.repeat(200),
+      srtpRequired: false,
+      callState: 'active',
+    });
+    const longNative = evidence(longEngine);
+    expect(longNative?.engine).toBeNull();
+    // A literal boolean is preserved either way (false is real evidence).
+    expect(longNative?.requiredSrtp).toBe(false);
+    // Only exact CallState tokens are accepted (no case folding).
+    expect(longNative?.callState).toBeNull();
+  });
+
+  it('exports unknown native evidence (not fabricated values) when the command fails', async () => {
+    const diag = await diagClient(new Error('native engine unavailable'));
+    const native = evidence(diag);
+    expect(native).toBeDefined();
+    expect(native?.engine).toBeNull();
+    expect(native?.requiredSrtp).toBeNull();
+    expect(native?.callState).toBeNull();
+    expect(JSON.stringify(diag)).not.toContain('native engine unavailable');
+    expect(diag.callState).toBe('Active');
+  });
+});
+
 describe('NativeSipClient call power (transfer / consult / swap / waiting)', () => {
   function makeClient() {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];

@@ -2,9 +2,8 @@
   "name": "daad",
   "private": true,
   "license": "GPL-3.0-or-later",
-  "version": "0.6.0-alpha.2",
+  "version": "0.7.0",
   "type": "module",
-
   "scripts": {
     "native:prepare": "bun scripts/build-native.ts",
     "test:native": "python3 scripts/test-native.py",
@@ -23,7 +22,8 @@
     "ios:build": "tauri ios build",
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",
-    "android:build": "tauri android build"
+    "android:build": "bun run android:prepare && tauri android build --apk --aab --target aarch64",
+    "android:prepare": "bun scripts/prepare-android.ts"
   },
   "dependencies": {
     "@fluentui/react-components": "^9.74.7",

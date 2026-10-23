@@ -4,7 +4,6 @@ use std::{ffi::{c_char, c_int, c_void, CStr, CString}, sync::{mpsc, Arc, Mutex},
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{Emitter, Manager, State};
-use crate::credentials::{CredentialStore, KeyringStore};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -16,6 +15,7 @@ extern "C" {
     fn daad_account(host: *const c_char, port: c_int, transport: *const c_char, identity: *const c_char,
         registrar: *const c_char, username: *const c_char, password: *const c_char, ca: *const c_char, expires: c_int) -> c_int;
     fn daad_register(enabled: c_int) -> c_int;
+    fn daad_network_changed() -> c_int;
     fn daad_dial(uri: *const c_char) -> c_int;
     fn daad_answer() -> c_int;
     fn daad_hangup(reject: c_int) -> c_int;
@@ -131,9 +131,11 @@ impl Snapshot {
                     let start = self.call["info"]["startTime"].as_u64()
                         .or_else(|| if state == "Active" { Some(millis().saturating_sub(event.connected_seconds.max(0) as u64 * 1000)) } else { None });
                     let muted = self.call["info"]["isMuted"].as_bool().unwrap_or(false);
+                    let held = self.call["info"]["isHeld"].as_bool().unwrap_or(false);
+                    let state = if held && state == "Active" { "Holding" } else { state };
                     self.call = json!({"state":state,"info":{"remoteIdentity":remote,"remoteUri":remote,
                         "direction":if event.incoming != 0 {"incoming"} else {"outgoing"},
-                        "startTime":start,"duration":event.connected_seconds.max(0),"isMuted":muted,"isHeld":false}});
+                        "startTime":start,"duration":event.connected_seconds.max(0),"isMuted":muted,"isHeld":held}});
                     if event.incoming != 0 && event.state == 2 {
                         if let Some(window) = app.get_webview_window("main") { let _ = window.show(); let _ = window.unminimize(); let _ = window.set_focus(); }
                     }
@@ -171,6 +173,11 @@ impl Snapshot {
                 self.connection["message"] = json!("Audio could not start. Check microphone permission and the selected system audio devices.");
                 let _ = app.emit("daad-call-event", json!({"type":"failed","reason":"Audio could not start","code":event.code}));
             }
+            7 => {
+                self.connection["reconnecting"] = json!(self.enabled && event.state == 0);
+                if event.state == 0 { self.connection["registered"] = json!(false); }
+                if event.code != 0 { self.connection["message"] = json!("Network recovery failed. Check your connection and reconnect."); }
+            }
             5 if self.call["info"].is_object() => {
                 let held = event.state == 2 || event.state == 3;
                 self.call["info"]["isHeld"] = json!(held);
@@ -179,11 +186,17 @@ impl Snapshot {
             }
             _ => {}
         }
+        if self.enabled && matches!(event.kind, 2 | 5) {
+            let state = if self.call["state"] == "Ringing" && self.call["info"]["direction"] == "incoming" {
+                "Incoming"
+            } else { self.call["state"].as_str().unwrap_or("Idle") };
+            crate::platform::call_state(app, state);
+        }
         self.emit(app);
     }
 }
 
-enum Op { Provision(Account), Register, Unregister, Remove, Dial(String), Answer, Hangup(bool), Mute(bool), Hold(bool), Dtmf(String), Shutdown }
+enum Op { Provision(Account), Register, Unregister, Remove, NetworkChanged, Dial(String), Answer, Hangup(bool), Mute(bool), Hold(bool), Dtmf(String), Shutdown }
 struct Request { op: Op, reply: tokio::sync::oneshot::Sender<Result<(), String>> }
 pub struct Engine { tx: mpsc::Sender<Request>, snapshot: Arc<Mutex<Snapshot>> }
 impl Engine {
@@ -195,11 +208,18 @@ impl Engine {
             let (events_tx, events_rx) = mpsc::channel::<Event>();
             let sender = Box::new(events_tx);
             let context = (&*sender as *const mpsc::Sender<Event>) as *mut c_void;
-            let vault = KeyringStore::new();
+            let vault = crate::platform::credentials(&app);
             let mut account: Option<Account> = None;
             let mut initialized = false;
+            let mut last_poll = SystemTime::now();
             loop {
                 let request = if initialized {
+                    let now = SystemTime::now();
+                    if now.duration_since(last_poll).unwrap_or_default().as_secs() >= 15 && state.lock().unwrap().enabled {
+                        // Let PJSIP refresh contacts/media after a suspended process resumes.
+                        let _ = result(unsafe { daad_network_changed() });
+                    }
+                    last_poll = now;
                     unsafe { daad_poll(20); }
                     match rx.try_recv() { Ok(r) => Some(r), Err(mpsc::TryRecvError::Empty) => None, Err(_) => break }
                 } else {
@@ -217,7 +237,8 @@ impl Engine {
                                 if state.lock().unwrap().call["state"] != "Idle" { return Err("End the current call before changing accounts.".into()); }
                                 if initialized { unsafe { daad_destroy(); } initialized = false; }
                                 while events_rx.try_recv().is_ok() {}
-                                open(&next, context)?;
+                                crate::platform::prepare(&app)?;
+                                open(&next, context, &app)?;
                                 initialized = true;
                                 // One atomic vault item keeps account, CA and credentials together.
                                 let saved = serde_json::to_string(&next).map_err(|_| "Could not save account")?;
@@ -230,14 +251,16 @@ impl Engine {
                                 account = Some(next);
                             }
                             Op::Register => {
+                                crate::platform::prepare(&app)?;
                                 if !initialized {
                                     let saved = vault.load_password("pjsip-account")?.ok_or("No saved account. Sign in first.")?;
                                     let restored: Account = serde_json::from_str(&saved).map_err(|_| "Saved account is invalid; sign in again.")?;
-                                    open(&restored, context)?;
+                                    open(&restored, context, &app)?;
                                     initialized = true;
                                     state.lock().unwrap().tls = restored.transport == "tls";
                                     account = Some(restored);
                                 }
+                                crate::platform::session(&app, true)?;
                                 let mut s = state.lock().unwrap();
                                 s.enabled = true;
                                 s.connection["failureKind"] = json!("none"); s.connection["message"] = Value::Null;
@@ -247,12 +270,22 @@ impl Engine {
                             Op::Unregister | Op::Remove => {
                                 let remove = matches!(request.op, Op::Remove);
                                 if initialized { result(unsafe { daad_register(0) })?; }
+                                crate::platform::session(&app, false)?;
                                 let mut s = state.lock().unwrap(); s.enabled = false;
                                 s.connection = Snapshot::default().connection;
                                 if remove {
                                     vault.delete_password("pjsip-account")?;
                                     account = None;
                                     if initialized { unsafe { daad_destroy(); } initialized = false; }
+                                }
+                            }
+                            Op::NetworkChanged => {
+                                if initialized && state.lock().unwrap().enabled {
+                                    let mut s = state.lock().unwrap();
+                                    s.connection["registered"] = json!(false);
+                                    s.connection["reconnecting"] = json!(true);
+                                    drop(s);
+                                    result(unsafe { daad_network_changed() })?;
                                 }
                             }
                             Op::Dial(target) => {
@@ -290,12 +323,13 @@ impl Engine {
         response.await.map_err(|_| "Native phone stopped")?
     }
 }
-fn open(account: &Account, context: *mut c_void) -> Result<(), String> {
+fn open(account: &Account, context: *mut c_void, app: &tauri::AppHandle) -> Result<(), String> {
+    let roots = if account.trusted_ca().is_empty() { crate::platform::system_ca(app)? } else { account.trusted_ca().to_owned() };
     let setup = (|| {
         result(unsafe { daad_init(callback, context, 0) })?;
         result(unsafe { daad_account(cstr(&account.host)?.as_ptr(), account.port as i32,
             cstr(&account.transport)?.as_ptr(), cstr(&account.identity)?.as_ptr(), cstr(&account.registrar())?.as_ptr(),
-            cstr(&account.username)?.as_ptr(), cstr(&account.password)?.as_ptr(), cstr(account.trusted_ca())?.as_ptr(), account.expires as i32) })
+            cstr(&account.username)?.as_ptr(), cstr(&account.password)?.as_ptr(), cstr(&roots)?.as_ptr(), account.expires as i32) })
     })();
     if setup.is_err() { unsafe { daad_destroy(); } }
     setup
@@ -320,6 +354,8 @@ async fn sip_account_upsert(engine: State<'_, Engine>, server_url: String, sip_u
 async fn sip_register(engine: State<'_, Engine>) -> Result<(), String> { engine.request(Op::Register).await }
 #[tauri::command]
 async fn sip_unregister(engine: State<'_, Engine>) -> Result<(), String> { engine.request(Op::Unregister).await }
+#[tauri::command]
+async fn sip_network_changed(engine: State<'_, Engine>) -> Result<(), String> { engine.request(Op::NetworkChanged).await }
 #[tauri::command]
 async fn sip_account_remove(engine: State<'_, Engine>) -> Result<(), String> { engine.request(Op::Remove).await }
 #[tauri::command]
@@ -349,14 +385,20 @@ fn sip_diagnostics_export(engine: State<'_, Engine>) -> Value {
 }
 
 pub fn run() {
+    #[cfg(desktop)]
     use tauri::{menu::{Menu, MenuItem}, tray::TrayIconBuilder};
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(tauri_plugin_phone_platform::init());
+    let app = builder
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![sip_account_upsert, sip_account_remove, sip_register,
-            sip_unregister, sip_status, sip_call_invite, sip_call_answer, sip_call_reject, sip_call_hangup,
+            sip_unregister, sip_network_changed, sip_status, sip_call_invite, sip_call_answer, sip_call_reject, sip_call_hangup,
             sip_call_mute, sip_call_hold, sip_call_dtmf, sip_audio_route, sip_diagnostics_export, crate::open_url])
         .setup(|app| {
             app.manage(Engine::start(app.handle().clone()));
+            #[cfg(desktop)]
+            {
             let show = MenuItem::with_id(app, "show", "Show Daad", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
@@ -370,10 +412,16 @@ pub fn run() {
                         _ => {}
                     }).build(app)?;
             }
+            }
             Ok(())
         })
-        .on_window_event(|window, event| if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-            api.prevent_close(); let _ = window.hide();
+        .on_window_event(|window, event| {
+            #[cfg(desktop)]
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close(); let _ = window.hide();
+            }
+            #[cfg(mobile)]
+            let _ = (window, event);
         })
         .build(tauri::generate_context!()).expect("Could not start Daad");
     app.run(|app, event| if let tauri::RunEvent::Exit = event {

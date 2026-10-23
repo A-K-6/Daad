@@ -70,6 +70,27 @@ describe('SipContext (native)', () => {
     localStorage.clear();
   });
 
+  it('refreshes the saved account after network-online without reprovisioning or redialing', async () => {
+    localStorage.setItem('daad_sip_session', '1');
+    const { client, calls } = makeMockClient();
+    const view = render(<SipProvider client={client}><Probe /></SipProvider>);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    calls.length = 0;
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    expect(calls.map((call) => call.cmd)).toEqual(['sip_network_changed']);
+    view.unmount();
+    calls.length = 0;
+    window.dispatchEvent(new Event('online'));
+    expect(calls).toHaveLength(0);
+  });
+
+  it('does not recover or register an account after logout', async () => {
+    const { client, calls } = makeMockClient();
+    render(<SipProvider client={client}><Probe /></SipProvider>);
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    expect(calls.some((call) => call.cmd === 'sip_network_changed' || call.cmd === 'sip_register')).toBe(false);
+  });
+
   it('reconnects using the native saved account without reprovisioning credentials', async () => {
     const { client, calls } = makeMockClient();
     let ctx: ReturnType<typeof useSip> | null = null;
@@ -376,6 +397,125 @@ describe('SipContext (native)', () => {
     expect(ctx!.hasSecondLeg).toBe(false);
     const stored = localStorage.getItem('daad_sip_profile') || '';
     expect(stored).not.toContain('1004');
+  });
+});
+
+function makeCommandFailingClient(failing: Record<string, string>) {
+  const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+  const client = new NativeSipClient({
+    invokeFn: async (cmd, args) => {
+      calls.push({ cmd, args });
+      if (cmd in failing) throw new Error(failing[cmd]);
+      return undefined;
+    },
+    listenFn: () => Promise.resolve(() => undefined),
+  });
+  return { client, calls };
+}
+
+describe('SipContext basic native call handling', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('surfaces an immediate native invite failure in callError (awaited dial)', async () => {
+    const { client, calls } = makeCommandFailingClient({
+      sip_call_invite: 'Call setup failed (SIP 503)',
+    });
+    let ctx: ReturnType<typeof useSip> | null = null;
+    render(
+      <SipProvider client={client}>
+        <Probe onCtx={(c) => { ctx = c; }} />
+      </SipProvider>,
+    );
+    expect(calls.some((c) => c.cmd === 'sip_call_invite')).toBe(false);
+
+    // An immediate native invite failure is user-visible state, not a thrown
+    // exception that callers must remember to handle.
+    await act(async () => {
+      await expect(ctx!.makeCall('2001')).resolves.toBeUndefined();
+    });
+
+    expect(calls.map((c) => c.cmd)).toContain('sip_call_invite');
+    expect(ctx!.callError).toContain('SIP 503');
+    expect(ctx!.callState).toBe('Idle');
+  });
+
+  it('does not raise an unhandled rejection for floating dials (Recents path)', async () => {
+    const { client } = makeCommandFailingClient({
+      sip_call_invite: 'Call setup failed (SIP 503)',
+    });
+    let ctx: ReturnType<typeof useSip> | null = null;
+    render(
+      <SipProvider client={client}>
+        <Probe onCtx={(c) => { ctx = c; }} />
+      </SipProvider>,
+    );
+
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown) => { rejections.push(reason); };
+    process.on('unhandledRejection', onRejection);
+    try {
+      // Recents path: `makeCall(target)` is invoked without a `.catch()`.
+      await act(async () => {
+        void ctx!.makeCall('2001');
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    } finally {
+      process.off('unhandledRejection', onRejection);
+    }
+
+    expect(rejections).toHaveLength(0);
+    expect(ctx!.callError).toContain('SIP 503');
+  });
+
+  it('surfaces answer/reject/hangup command failures in callError', async () => {
+    const { client } = makeCommandFailingClient({
+      sip_call_answer: 'Answer failed: no ringing call',
+      sip_call_reject: 'Reject failed (SIP 481)',
+      sip_call_hangup: 'Hangup failed: transport closed',
+    });
+    let ctx: ReturnType<typeof useSip> | null = null;
+    render(
+      <SipProvider client={client}>
+        <Probe onCtx={(c) => { ctx = c; }} />
+      </SipProvider>,
+    );
+
+    // Call-control buttons invoke these without awaiting; they must report the
+    // failure through callError instead of rejecting.
+    await act(async () => {
+      await expect(ctx!.answerCall()).resolves.toBeUndefined();
+    });
+    expect(ctx!.callError).toContain('no ringing call');
+
+    await act(async () => {
+      await expect(ctx!.rejectCall()).resolves.toBeUndefined();
+    });
+    expect(ctx!.callError).toContain('SIP 481');
+
+    await act(async () => {
+      await expect(ctx!.hangup()).resolves.toBeUndefined();
+    });
+    expect(ctx!.callError).toContain('transport closed');
+  });
+
+  it('surfaces DTMF command failures in callError', async () => {
+    const { client, calls } = makeCommandFailingClient({
+      sip_call_dtmf: 'DTMF rejected: no active call',
+    });
+    let ctx: ReturnType<typeof useSip> | null = null;
+    render(
+      <SipProvider client={client}>
+        <Probe onCtx={(c) => { ctx = c; }} />
+      </SipProvider>,
+    );
+    await act(async () => {
+      ctx!.sendDTMF('5');
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(calls.map((c) => c.cmd)).toContain('sip_call_dtmf');
+    expect(ctx!.callError).toContain('DTMF rejected');
   });
 });
 

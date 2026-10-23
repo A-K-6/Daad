@@ -109,17 +109,21 @@ def main():
                 time.sleep(300)
                 return
             cli("pjsip set logger on")
-            for name in ("outgoing", "incoming", "dtmf", "bad-password", "untrusted-ca"):
+            for name in ("outgoing", "incoming", "dtmf", "controls", "recovery", "bad-password", "untrusted-ca"):
                 testenv = dict(os.environ, DAAD_TEST_USER="1001", DAAD_TEST_PASSWORD=passwords["1001"])
                 testenv.pop("DAAD_TEST_RECEIVE", None)
                 testenv.pop("DAAD_TEST_TARGET", None)
                 testenv.pop("DAAD_TEST_DTMF", None)
+                testenv.pop("DAAD_TEST_CONTROLS", None)
+                testenv.pop("DAAD_TEST_RECOVERY", None)
                 ca = work/"ca.crt"
                 if name == "bad-password": testenv["DAAD_TEST_PASSWORD"] = "wrong-password"
                 if name == "untrusted-ca":
                     ca = work/"empty.pem"; ca.write_text("")
                 if name == "incoming": testenv["DAAD_TEST_RECEIVE"] = "1"
                 if name == "dtmf": testenv["DAAD_TEST_DTMF"] = "1"
+                if name == "controls": testenv["DAAD_TEST_CONTROLS"] = "1"
+                if name == "recovery": testenv["DAAD_TEST_RECOVERY"] = "1"
                 output = work/(name + ".wav")
                 with (work/(name + ".log")).open("w+") as log:
                     process = subprocess.Popen([str(driver), str(ca), str(output)], env=testenv, stdout=log, stderr=log)
@@ -135,8 +139,8 @@ def main():
                     finally:
                         if process.poll() is None: process.kill(); process.wait()
                     log.seek(0); content = log.read()
-                if name in ("outgoing", "incoming", "dtmf"):
-                    assert process.returncode == 0 and "srtp_active=1" in content, f"{name}: call/SRTP failed"
+                if name in ("outgoing", "incoming", "dtmf", "controls", "recovery"):
+                    assert process.returncode == 0 and "srtp_active=1" in content, f"{name}: call/SRTP failed: {content}"
                     assert "kind=1 code=200 state=0" in content, "Unregister was not acknowledged"
                     try:
                         audio = verify_audio(output)
@@ -145,6 +149,8 @@ def main():
                         raise
                     if name == "dtmf":
                         assert "dtmf rfc4733_hash_received=1" in content, "Asterisk did not act on keypad digit"
+                    if name == "controls": assert "controls mute_hold_resume=1" in content
+                    if name == "recovery": assert "network recovered=1" in content
                     report.append({"test":name,"srtp":True,**audio})
                 else:
                     assert process.returncode != 0 and "code=200 state=1" not in content, f"{name}: unexpectedly registered"
