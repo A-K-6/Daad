@@ -98,6 +98,7 @@ int main(int argc, char **argv) {
     pjmedia_srtp_info *srtp = pjmedia_transport_info_get_spc_info(&transport_info, PJMEDIA_TRANSPORT_TYPE_SRTP);
     if (!srtp || !srtp->active) { fprintf(stderr, "SRTP was not active\n"); daad_destroy(); return 1; }
     puts("media srtp_active=1");
+    fflush(stdout);
     pjsua_recorder_id recorder;
     pj_str_t output = pj_str(argv[2]);
     if (check(pjsua_recorder_create(&output, 0, NULL, 0, 0, &recorder), "recorder")) return 1;

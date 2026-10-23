@@ -36,7 +36,7 @@ const hash = createHash('sha256').update(await Bun.file(archive).bytes()).digest
 if (hash !== sha256) throw new Error('PJSIP source checksum mismatch; refusing build.');
 await run(['tar', '-xzf', archive, '-C', base]);
 if (process.platform === 'win32') {
-  await run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts/build-windows.ps1'), '-Source', source, '-Prefix', prefix]);
+  await run(['pwsh', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts/build-windows.ps1'), '-Source', source, '-Prefix', prefix]);
   process.exit(0);
 }
 let sslPrefix = process.env.DAAD_OPENSSL_PREFIX;

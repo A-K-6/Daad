@@ -11,6 +11,8 @@ build/
 # Tauri & Rust
 src-tauri/target/
 src-tauri/gen/
+src-tauri/plugins/*/android/.tauri/
+src-tauri/plugins/*/android/.gradle/
 **/*.rs.bk
 
 # Environment & local secrets
