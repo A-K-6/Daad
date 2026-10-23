@@ -143,6 +143,7 @@ impl Snapshot {
                     self.call = json!({"state":state,"info":{"remoteIdentity":remote,"remoteUri":remote,
                         "direction":if event.incoming != 0 {"incoming"} else {"outgoing"},
                         "startTime":start,"duration":event.connected_seconds.max(0),"isMuted":muted,"isHeld":held}});
+                    #[cfg(desktop)]
                     if event.incoming != 0 && event.state == 2 {
                         if let Some(window) = app.get_webview_window("main") { let _ = window.show(); let _ = window.unminimize(); let _ = window.set_focus(); }
                     }

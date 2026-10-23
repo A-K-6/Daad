@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "native:prepare": "bun scripts/build-native.ts",
+    "release:check": "bun scripts/check-version.ts",
     "test:native": "python3 scripts/test-native.py",
     "dev": "vite",
     "dev:phone": "HTTPS=true vite",

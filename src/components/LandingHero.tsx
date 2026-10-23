@@ -5,6 +5,12 @@ import { DaadLogo } from '@/components/DaadLogo';
 
 export const LandingHero: React.FC = () => {
   const version = updateService.getCurrentVersion();
+  const downloads = [
+    { platform: 'macOS', detail: 'Apple Silicon (.dmg)', asset: `Daad_${version}_aarch64.dmg` },
+    { platform: 'Windows', detail: 'x64 installer (.exe)', asset: `Daad_${version}_x64-setup.exe` },
+    { platform: 'Linux', detail: 'x64 (.AppImage)', asset: `Daad_${version}_amd64.AppImage` },
+    { platform: 'Android', detail: 'arm64 signed app (.apk)', asset: `Daad_${version}_android_arm64.apk` },
+  ];
 
   return (
     <div className="flex-1 max-w-2xl px-6 py-8 lg:py-12 text-[var(--fg-1)] flex flex-col justify-between overflow-y-auto">
@@ -23,32 +29,34 @@ export const LandingHero: React.FC = () => {
                 Daad <span className="text-[var(--fg-3)] font-normal text-xl lg:text-3xl">/ داد</span>
               </h1>
               <p className="text-[11px] lg:text-xs text-[var(--accent)] font-mono uppercase tracking-wider">
-                Native Desktop Softphone
+                Native Softphone
               </p>
             </div>
           </div>
           <p className="text-sm lg:text-base text-[var(--fg-2)] max-w-lg leading-relaxed pt-1">
-            A small native softphone for macOS Apple Silicon. One account, one call, encrypted audio, and a simple keypad. This alpha is for early testing.
+            A small native softphone for macOS, Windows, Linux, and Android. One account, one call, encrypted audio, and a simple keypad. Version 0.7 is for validation and early testing.
           </p>
         </div>
 
         {/* Download Matrix */}
         <div className="space-y-2.5">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--fg-3)]">
-            Download Desktop Binaries
+            Download v{version}
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-1 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {downloads.map(({ platform, detail, asset }) => (
             <a
-              href={`https://github.com/A-K-6/Daad/releases/download/v${version}/Daad_${version}_aarch64.dmg`}
+              key={platform}
+              href={`https://github.com/A-K-6/Daad/releases/download/v${version}/${asset}`}
               className="flex items-center justify-between p-3 rounded-md bg-[var(--surface-2)] hover:bg-[var(--surface-4)] border border-[var(--stroke-2)] hover:border-[var(--stroke-1)] shadow-[var(--shadow-2)] transition-all group"
             >
               <div>
-                <div className="text-sm font-medium text-[var(--fg-1)] group-hover:text-[var(--accent)]">macOS</div>
-                <div className="text-[11px] text-[var(--fg-3)] font-mono">Apple Silicon (.dmg)</div>
+                <div className="text-sm font-medium text-[var(--fg-1)] group-hover:text-[var(--accent)]">{platform}</div>
+                <div className="text-[11px] text-[var(--fg-3)] font-mono">{detail}</div>
               </div>
               <Download className="w-4 h-4 text-[var(--fg-3)] group-hover:text-[var(--accent)]" />
             </a>
-
+            ))}
           </div>
         </div>
 
@@ -98,7 +106,7 @@ export const LandingHero: React.FC = () => {
 
         <p className="text-xs text-[var(--fg-3)]">
           Requires a SIP account on a PBX supporting TLS and SDES-SRTP.
-          Windows, Linux, Intel Mac, and mobile packages are not offered in this release.
+          iOS and Intel Mac packages are outside this release. Android requires reopening after force-stop.
         </p>
       </div>
 

@@ -14,6 +14,7 @@ const androidTargets: Record<string, { arch: string; abi: string; openssl: strin
 };
 if (targetIndex >= 0 && !androidTargets[target || '']) throw new Error('Supported cross targets: aarch64-linux-android, x86_64-linux-android');
 const android = target ? androidTargets[target] : undefined;
+if (android && process.platform === 'win32') throw new Error('Build Android native dependencies on Linux or macOS (WSL is also suitable).');
 const base = path.join(root, 'src-tauri', 'target', 'native', android ? `android-${android.arch}` : `${process.platform}-${process.arch}`);
 const source = path.join(base, `pjproject-${version}`);
 const prefix = path.join(base, 'install');

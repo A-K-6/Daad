@@ -11,6 +11,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import android.webkit.WebView
+import androidx.appcompat.app.AppCompatActivity
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
@@ -28,9 +29,9 @@ import javax.net.ssl.X509TrustManager
 @InvokeArg
 class AccountArgs { lateinit var id: String; var value: String? = null }
 @InvokeArg
-class SessionArgs { var enabled: Boolean = false }
+class SessionArgs { var enabled: Boolean = false; var sequence: Long = 0 }
 @InvokeArg
-class StateArgs { lateinit var state: String }
+class StateArgs { lateinit var state: String; var sequence: Long = 0 }
 @InvokeArg
 class UrlArgs { lateinit var url: String }
 
@@ -39,12 +40,17 @@ class PhonePlugin(private val activity: Activity): Plugin(activity) {
     private external fun nativeInitialize()
     private val preferences get() = activity.getSharedPreferences("daad-accounts", Context.MODE_PRIVATE)
     private val alias = "daad-account-encryption-v1"
+    private var lastSequence: Long = 0
     override fun load(webView: WebView) {
         nativeInitialize()
         val permissions = mutableListOf(Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33) permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         val missing = permissions.filter { activity.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) activity.requestPermissions(missing.toTypedArray(), 700)
+    }
+    override fun onDestroy(activity: AppCompatActivity) {
+        if (!activity.isChangingConfigurations) activity.stopService(Intent(activity, PhoneService::class.java))
+        super.onDestroy(activity)
     }
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -111,8 +117,10 @@ class PhonePlugin(private val activity: Activity): Plugin(activity) {
     @Command
     fun session(invoke: Invoke) {
         try {
+            val args = invoke.parseArgs(SessionArgs::class.java)
+            lastSequence = maxOf(lastSequence, args.sequence)
             val intent = Intent(activity, PhoneService::class.java)
-            if (invoke.parseArgs(SessionArgs::class.java).enabled) {
+            if (args.enabled) {
                 if (Build.VERSION.SDK_INT >= 26) activity.startForegroundService(intent) else activity.startService(intent)
             } else activity.stopService(intent)
             invoke.resolve(JSObject())
@@ -120,7 +128,11 @@ class PhonePlugin(private val activity: Activity): Plugin(activity) {
     }
     @Command
     fun callState(invoke: Invoke) {
-        PhoneService.update(activity, invoke.parseArgs(StateArgs::class.java).state)
+        val args = invoke.parseArgs(StateArgs::class.java)
+        if (args.sequence > lastSequence) {
+            lastSequence = args.sequence
+            PhoneService.update(activity, args.state)
+        }
         invoke.resolve(JSObject())
     }
     @Command

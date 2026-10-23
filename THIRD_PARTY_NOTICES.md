@@ -1,6 +1,6 @@
 # Native alpha licensing
 
-Daad 0.6.0-alpha.2 is distributed under GPL-3.0-or-later. See LICENSE.
+Daad 0.7.0 is distributed under GPL-3.0-or-later. See LICENSE.
 Earlier source remains available in Git history under its original terms.
 
 The native engine is PJSIP 2.17 (GPL-2.0-or-later, used under GPLv3), from
@@ -18,3 +18,9 @@ their original licenses; the dependency locks identify their versions.
 A binary release must include corresponding Daad source, the pinned PJSIP
 source archive, dependency source/build information and these notices.
 Do not publish a binary-only release.
+
+Android packages also include the matching Android NDK C++ shared runtime.
+The NDK's notices are copied into the APK assets under
+`third-party/ANDROID_NDK_NOTICE.txt` during Android preparation. Android Keystore
+and the microphone foreground service are implemented in the local
+`src-tauri/plugins/phone-platform` source included with Daad.

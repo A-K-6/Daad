@@ -1,5 +1,6 @@
 package com.daad.phone
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,6 +8,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 
@@ -17,16 +19,18 @@ class PhoneService: Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         running = true
         createChannels(this)
-        startForeground(1, notification(this, "Idle"))
+        startForeground(1, notification(this, lastState))
         return START_NOT_STICKY
     }
     override fun onDestroy() {
         running = false
+        lastState = "Idle"
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
     companion object {
         private var running = false
+        private var lastState = "Idle"
         private fun createChannels(context: Context) {
             if (Build.VERSION.SDK_INT >= 26) {
                 val manager = context.getSystemService(NotificationManager::class.java)
@@ -45,7 +49,9 @@ class PhoneService: Service() {
                 .setOngoing(true).build()
         }
         fun update(context: Context, state: String) {
+            lastState = state
             if (!running) return
+            if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
             createChannels(context)
             context.getSystemService(NotificationManager::class.java).notify(1, notification(context, state))
         }
