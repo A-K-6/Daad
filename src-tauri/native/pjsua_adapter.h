@@ -4,7 +4,7 @@
 /* All commands run on one registered native thread. PJSIP owns SIP
  * transactions, audio devices, codecs, SRTP, jitter and echo cancellation. */
 typedef struct {
-    int kind; /* 1 registration, 2 call, 3 transport, 4 media error, 5 media state, 6 certificate failure */
+    int kind; /* 1 registration, 2 call, 3 transport, 4 media error, 5 media state, 6 certificate failure, 7 IP refresh, 8 busy incoming */
     int code;
     int state;
     int incoming;
@@ -21,6 +21,7 @@ int daad_account(const char *host, int port, const char *transport,
                  const char *username, const char *password, const char *ca,
                  int expires);
 int daad_register(int enabled);
+int daad_network_changed(void);
 int daad_dial(const char *uri);
 int daad_answer(void);
 int daad_hangup(int reject);

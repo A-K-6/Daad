@@ -152,6 +152,53 @@ export function sanitizeForLog(event: string, args?: Record<string, unknown>): R
   };
 }
 
+/**
+ * Native engine evidence exported in diagnostics. Explicit, bounded allowlist:
+ * engine/version token, mandatory-SRTP flag and the native call state only.
+ * Free-form native text, messages, identities, URIs, SDP and keys never land here.
+ */
+export interface SanitizedNativeDiagnostics {
+  engine: string | null;
+  requiredSrtp: boolean | null;
+  callState: string | null;
+}
+
+/** Only exact `CallState` tokens count as native call-state evidence. */
+const NATIVE_CALL_STATES: ReadonlySet<string> = new Set<string>([
+  'Idle',
+  'Calling',
+  'Ringing',
+  'Active',
+  'Holding',
+]);
+
+/** Short version token (e.g. `PJSIP 2.17`) — no schemes, paths, newlines or headers. */
+const NATIVE_ENGINE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 .()_+-]{0,31}$/;
+
+/**
+ * Project a raw `sip_diagnostics_export` payload onto the bounded allowlist.
+ * Unknown/missing/mistyped values become `null` rather than being forwarded.
+ */
+export function sanitizeNativeDiagnostics(payload: unknown): SanitizedNativeDiagnostics {
+  const empty: SanitizedNativeDiagnostics = {
+    engine: null,
+    requiredSrtp: null,
+    callState: null,
+  };
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return empty;
+  const raw = payload as Record<string, unknown>;
+  const engine = raw.engine;
+  const requiredSrtp = raw.srtpRequired;
+  const callState = raw.callState;
+  return {
+    engine:
+      typeof engine === 'string' && NATIVE_ENGINE_PATTERN.test(engine) ? engine : null,
+    requiredSrtp: typeof requiredSrtp === 'boolean' ? requiredSrtp : null,
+    callState:
+      typeof callState === 'string' && NATIVE_CALL_STATES.has(callState) ? callState : null,
+  };
+}
+
 export interface SanitizedDiagnostics {
   generatedAt: string;
   connectionState: ConnectionState;
@@ -162,6 +209,12 @@ export interface SanitizedDiagnostics {
   sipUser: string | null;
   contactsReachable: number | null;
   recentEvents: Array<{ kind: string; at: string }>;
+  /**
+   * Native engine evidence. Always populated by `sanitizeDiagnostics` /
+   * `exportDiagnostics`; optional only so older/hand-built exports (and test
+   * fixtures) stay assignable.
+   */
+  native?: SanitizedNativeDiagnostics;
   notes: string;
 }
 
@@ -174,6 +227,8 @@ export function sanitizeDiagnostics(input: {
   username?: string;
   contactsReachable?: number | null;
   recentEvents?: Array<{ kind: string; at: string }>;
+  /** Raw native diagnostics payload — allowlisted via `sanitizeNativeDiagnostics`. */
+  native?: unknown;
 }): SanitizedDiagnostics {
   let serverHost: string | null = null;
   try {
@@ -199,7 +254,9 @@ export function sanitizeDiagnostics(input: {
     sipUser: input.username ? '[extension-present]' : null,
     contactsReachable: input.contactsReachable ?? null,
     recentEvents: (input.recentEvents || []).map((e) => ({ kind: e.kind, at: e.at })),
-    notes: 'Sanitized: no passwords, tokens, SDP, SRTP keys, or full SIP URIs.',
+    native: sanitizeNativeDiagnostics(input.native),
+    notes:
+      'Sanitized: no passwords, tokens, SDP, SRTP keys, full SIP URIs, or native error text.',
   };
 }
 
@@ -264,6 +321,7 @@ export class NativeSipClient {
   private call(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
     return this.invokeFn(cmd, args);
   }
+  async networkChanged(): Promise<void> { await this.call('sip_network_changed'); }
 
   async accountUpsert(args: AccountUpsertArgs): Promise<void> {
     if (!args.serverUrl?.trim() || !args.sipUri?.trim() || !args.username?.trim()) {
@@ -398,15 +456,15 @@ export class NativeSipClient {
     contactsReachable?: number | null;
     recentEvents?: Array<{ kind: string; at: string }>;
   }): Promise<SanitizedDiagnostics> {
-    let native: Record<string, unknown> = {};
+    // Keep the native payload only as allowlisted evidence — never forward the
+    // raw object (it can carry connection messages, identities and SDP).
+    let native: unknown = null;
     try {
-      native = (await this.call('sip_diagnostics_export')) as Record<string, unknown>;
+      native = await this.call('sip_diagnostics_export');
     } catch {
-      native = {};
+      native = null;
     }
-    const sanitizedNative = stripSecrets(native) as Record<string, unknown>;
-    void sanitizedNative;
-    return sanitizeDiagnostics(input);
+    return sanitizeDiagnostics({ ...input, native });
   }
 
   async onConnectionState(handler: (s: NativeSipStatus) => void): Promise<() => void> {

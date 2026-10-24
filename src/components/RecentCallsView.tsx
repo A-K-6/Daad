@@ -30,7 +30,7 @@ export const RecentCallsView: React.FC<RecentCallsViewProps> = ({
   };
 
   const getCallIcon = (record: CallRecord) => {
-    if (record.status === 'missed') {
+    if (record.status !== 'answered') {
       return <PhoneMissed className="w-3.5 h-3.5 text-[var(--danger-fg)]" />;
     }
     if (record.direction === 'incoming') {
@@ -84,6 +84,7 @@ export const RecentCallsView: React.FC<RecentCallsViewProps> = ({
                 </h4>
                 <div className="flex items-center space-x-1.5 text-[11px] text-[var(--fg-3)] font-mono">
                   <span>{formatTimeAgo(record.timestamp)}</span>
+                  {record.status !== 'answered' && <span>• {record.status}</span>}
                   {record.duration > 0 && (
                     <>
                       <span>•</span>

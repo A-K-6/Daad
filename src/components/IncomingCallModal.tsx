@@ -4,12 +4,14 @@ import { CallInfo } from '@/types';
 
 interface IncomingCallModalProps {
   callInfo: CallInfo | null;
+  error?: string | null;
   onAnswer: () => void;
   onDecline: () => void;
 }
 
 export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
   callInfo,
+  error,
   onAnswer,
   onDecline,
 }) => {
@@ -83,6 +85,7 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
         <p className="text-xs text-[var(--fg-3)] font-mono mt-1 truncate max-w-[280px]">
           {callInfo.remoteUri}
         </p>
+        {error && <p role="alert" className="mt-4 text-xs text-center text-[var(--danger-fg)]">{error}</p>}
       </div>
 
       {/* Answer & Decline Controls with Keyboard Shortcuts */}

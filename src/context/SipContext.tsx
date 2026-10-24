@@ -74,6 +74,11 @@ function persistProfile(p: SafeSipConfig): void {
   }
 }
 
+/** Human-readable text for a failed native call command (surfaced via `callError`). */
+function nativeCommandError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function toSafeProfile(cfg: SipConfig): SafeSipConfig {
   return {
     serverUrl: cfg.serverUrl,
@@ -201,7 +206,7 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
             target: done.remoteIdentity,
             displayName: done.remoteIdentity,
             direction: done.direction,
-            status: done.startTime !== null ? 'answered' : 'missed',
+            status: done.endStatus || (done.startTime !== null ? 'answered' : done.direction === 'incoming' ? 'missed' : 'failed'),
             duration,
           });
         } catch {
@@ -247,6 +252,9 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
     (ev: NativeCallEvent) => {
       if (!ev || typeof (ev as { type?: unknown }).type !== 'string') return;
       switch (ev.type) {
+        case 'missed_while_busy':
+          callHistoryService.addRecord({ target: ev.from, displayName: ev.from, direction: 'incoming', status: 'missed', duration: 0 });
+          break;
         case 'call_waiting':
           setWaitingCall({ from: ev.from, callId: ev.call_id });
           break;
@@ -351,11 +359,18 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
+    const handleOnline = () => {
+      if (localStorage.getItem(SESSION_KEY) === '1') {
+        native.networkChanged().catch((error) => setConnectionError(nativeCommandError(error)));
+      }
+    };
+    window.addEventListener('online', handleOnline);
 
     return () => {
       disposed = true;
       subscribed.current = false;
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('online', handleOnline);
       unsubHistory();
       for (const u of unsubs) {
         try {
@@ -512,21 +527,42 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
       const v = validateDialTarget(target);
       if (!v.ok) throw new Error(v.error || 'Invalid number');
       setCallError(null);
-      await native.invite(target.trim());
+      try {
+        await native.invite(target.trim());
+      } catch (e) {
+        // Immediate native invite failures are UI state: Recents/Keypad invoke
+        // this without a `.catch()`, so it must never reject.
+        setCallError(nativeCommandError(e));
+      }
     },
     [native],
   );
 
   const answerCall = useCallback(async () => {
-    await native.answer();
+    setCallError(null);
+    try {
+      await native.answer();
+    } catch (e) {
+      setCallError(nativeCommandError(e));
+    }
   }, [native]);
 
   const rejectCall = useCallback(async () => {
-    await native.reject();
+    setCallError(null);
+    try {
+      await native.reject();
+    } catch (e) {
+      setCallError(nativeCommandError(e));
+    }
   }, [native]);
 
   const hangup = useCallback(async () => {
-    await native.hangup();
+    setCallError(null);
+    try {
+      await native.hangup();
+    } catch (e) {
+      setCallError(nativeCommandError(e));
+    }
   }, [native]);
 
   const toggleMute = useCallback(() => {
@@ -546,7 +582,8 @@ export const SipProvider: React.FC<{ children: ReactNode; client?: NativeSipClie
 
   const sendDTMF = useCallback(
     (tone: string) => {
-      native.sendDtmf(tone).catch(() => undefined);
+      setCallError(null);
+      native.sendDtmf(tone).catch((e) => setCallError(nativeCommandError(e)));
     },
     [native],
   );

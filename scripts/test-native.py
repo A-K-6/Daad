@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 system = "darwin" if platform.system() == "Darwin" else "linux"
 arch = "arm64" if platform.machine() in ("arm64", "aarch64") else "x64"
 PREFIX = Path(os.environ.get("DAAD_PJSIP_PREFIX", ROOT / f"src-tauri/target/native/{system}-{arch}/install"))
-IMAGE = os.environ.get("DAAD_ASTERISK_IMAGE", "andrius/asterisk:20.8")
+IMAGE = os.environ.get("DAAD_ASTERISK_IMAGE", "andrius/asterisk:23.4.1_debian-trixie")
 NAME = f"daad-native-test-{os.getpid()}"
 
 
@@ -59,6 +59,11 @@ def verify_audio(file):
 
 def main():
     report = []
+    cases = ("outgoing", "incoming", "dtmf", "controls", "recovery", "busy", "bad-password", "untrusted-ca")
+    if "--case" in sys.argv:
+        case = sys.argv[sys.argv.index("--case") + 1]
+        if case not in cases: raise ValueError("Unknown isolated acceptance case")
+        cases = (case,)
     with tempfile.TemporaryDirectory(prefix="daad-native-acceptance-") as directory:
         work = Path(directory)
         env = dict(os.environ, PKG_CONFIG_PATH=str(PREFIX / "lib/pkgconfig"))
@@ -90,7 +95,10 @@ def main():
         args += ["-v", f"{work}:/etc/asterisk/keys:ro", IMAGE, "-f"]
         started = False
         try:
-            run(args)
+            try:
+                run(args)
+            except subprocess.CalledProcessError as error:
+                raise RuntimeError(f"Could not start the disposable Asterisk fixture: {error.stderr[:2000]}") from error
             started = True
             for _ in range(60):
                 try:
@@ -109,17 +117,21 @@ def main():
                 time.sleep(300)
                 return
             cli("pjsip set logger on")
-            for name in ("outgoing", "incoming", "dtmf", "bad-password", "untrusted-ca"):
+            for name in cases:
                 testenv = dict(os.environ, DAAD_TEST_USER="1001", DAAD_TEST_PASSWORD=passwords["1001"])
                 testenv.pop("DAAD_TEST_RECEIVE", None)
                 testenv.pop("DAAD_TEST_TARGET", None)
                 testenv.pop("DAAD_TEST_DTMF", None)
+                testenv.pop("DAAD_TEST_CONTROLS", None)
+                testenv.pop("DAAD_TEST_RECOVERY", None)
                 ca = work/"ca.crt"
                 if name == "bad-password": testenv["DAAD_TEST_PASSWORD"] = "wrong-password"
                 if name == "untrusted-ca":
                     ca = work/"empty.pem"; ca.write_text("")
                 if name == "incoming": testenv["DAAD_TEST_RECEIVE"] = "1"
                 if name == "dtmf": testenv["DAAD_TEST_DTMF"] = "1"
+                if name == "controls": testenv["DAAD_TEST_CONTROLS"] = "1"
+                if name == "recovery": testenv["DAAD_TEST_RECOVERY"] = "1"
                 output = work/(name + ".wav")
                 with (work/(name + ".log")).open("w+") as log:
                     process = subprocess.Popen([str(driver), str(ca), str(output)], env=testenv, stdout=log, stderr=log)
@@ -130,13 +142,15 @@ def main():
                             log.flush(); log.seek(0); content = log.read()
                             if name == "incoming" and not originated and "kind=1 code=200 state=1" in content:
                                 cli("channel originate PJSIP/1001 application Echo"); originated = True
+                            if name == "busy" and not originated and "media srtp_active=1" in content:
+                                cli("channel originate PJSIP/1001 application Echo"); originated = True
                             time.sleep(.1)
                         if process.poll() is None: raise RuntimeError(f"{name}: native client timed out")
                     finally:
                         if process.poll() is None: process.kill(); process.wait()
                     log.seek(0); content = log.read()
-                if name in ("outgoing", "incoming", "dtmf"):
-                    assert process.returncode == 0 and "srtp_active=1" in content, f"{name}: call/SRTP failed"
+                if name in ("outgoing", "incoming", "dtmf", "controls", "recovery", "busy"):
+                    assert process.returncode == 0 and "srtp_active=1" in content, f"{name}: call/SRTP failed: {content}"
                     assert "kind=1 code=200 state=0" in content, "Unregister was not acknowledged"
                     try:
                         audio = verify_audio(output)
@@ -145,6 +159,9 @@ def main():
                         raise
                     if name == "dtmf":
                         assert "dtmf rfc4733_hash_received=1" in content, "Asterisk did not act on keypad digit"
+                    if name == "controls": assert "controls mute_hold_resume=1" in content
+                    if name == "recovery": assert "network recovered=1" in content
+                    if name == "busy": assert "kind=8 code=486" in content, "Missing busy incoming-call history event"
                     report.append({"test":name,"srtp":True,**audio})
                 else:
                     assert process.returncode != 0 and "code=200 state=1" not in content, f"{name}: unexpectedly registered"
@@ -166,7 +183,7 @@ def main():
                 print(f"PASS {name}", flush=True)
         finally:
             if started: run(["docker", "rm", "-f", NAME])
-    destination = ROOT/"src-tauri/target/native-acceptance.json"
+    destination = ROOT/("src-tauri/target/native-acceptance-" + cases[0] + ".json" if len(cases) == 1 else "src-tauri/target/native-acceptance.json")
     destination.write_text(json.dumps(report, indent=2) + "\n")
     print(f"Evidence: {destination}")
 

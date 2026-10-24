@@ -1,5 +1,8 @@
 # Native alpha 0.6.0-alpha.2
 
+This file preserves the original alpha evidence. The v0.7.0 platform scope,
+build artifacts, and current acceptance gates are in [RELEASE_0_7.md](RELEASE_0_7.md).
+
 The desktop app uses PJSIP 2.17 for SIP transactions, native audio devices,
 G.711 audio, and mandatory SDES-SRTP. The former custom Rust SIP/media stack
 has been removed. The React interface calls a single native command adapter.
