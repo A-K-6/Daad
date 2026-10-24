@@ -285,6 +285,9 @@ impl Engine {
                                 crate::platform::session(&app, false)?;
                                 let mut s = state.lock().unwrap(); s.enabled = false;
                                 s.connection = Snapshot::default().connection;
+                                // Android vault operations wait for the UI thread, which
+                                // may be reading this snapshot through a status command.
+                                drop(s);
                                 if remove {
                                     vault.delete_password("pjsip-account")?;
                                     account = None;
