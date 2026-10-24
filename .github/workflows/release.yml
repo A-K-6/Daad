@@ -74,6 +74,9 @@ jobs:
             Add-Content -Path $env:GITHUB_ENV -Value "$($_.Name)=$($_.Value)"
           }
       - if: runner.os == 'macOS'
+        name: Require Apple Silicon release host
+        run: test "$(uname -m)" = arm64
+      - if: runner.os == 'macOS'
         run: brew install openssl@3 pkg-config
       - if: runner.os == 'Linux'
         run: |
@@ -184,6 +187,11 @@ jobs:
             "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$apk"
             "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 "$apk"
           done < <(find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -print0)
+          while IFS= read -r -d '' aab; do
+            jarsigner -J-Duser.language=en -J-Duser.country=US -verify "$aab" > "$RUNNER_TEMP/daad-aab-verification.txt"
+            cat "$RUNNER_TEMP/daad-aab-verification.txt"
+            grep -qx 'jar verified\.' "$RUNNER_TEMP/daad-aab-verification.txt"
+          done < <(find src-tauri/gen/android/app/build/outputs/bundle -name '*.aab' -print0)
       - uses: actions/upload-artifact@v7
         with:
           name: daad-android-arm64
