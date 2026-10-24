@@ -42,6 +42,19 @@ fn main() {
         native.compile("daad_pjsua_adapter");
         // Print link metadata after the adapter so static symbols resolve.
         pkg_config::Config::new().statik(true).probe("libpjproject").unwrap();
+        if std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "android" {
+            // PJSIP's guarded Android APIs use Clang's __isOSVersionAtLeast.
+            // Rust's -nodefaultlibs omits the NDK compiler runtime otherwise.
+            let output = native.get_compiler().to_command()
+                .arg("-print-libgcc-file-name").output().expect("Query the NDK compiler runtime");
+            assert!(output.status.success(), "NDK compiler runtime query failed");
+            let runtime = String::from_utf8(output.stdout).unwrap();
+            let runtime = runtime.trim();
+            assert!(std::path::Path::new(runtime).is_file(), "Missing NDK compiler runtime: {runtime}");
+            println!("cargo:rustc-link-arg={runtime}");
+            // Android's loader cannot supply unresolved compiler helpers.
+            println!("cargo:rustc-link-arg=-Wl,--no-undefined");
+        }
         }
     }
     tauri_build::build()

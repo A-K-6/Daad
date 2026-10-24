@@ -179,7 +179,11 @@ jobs:
       - run: bun run tauri android build --apk --aab --target aarch64 --ci
       - name: Verify signed release APK
         if: env.DAAD_ANDROID_KEYSTORE != ''
-        run: find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -exec "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose '{}' \;
+        run: |
+          while IFS= read -r -d '' apk; do
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$apk"
+            "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 "$apk"
+          done < <(find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -print0)
       - uses: actions/upload-artifact@v7
         with:
           name: daad-android-arm64
